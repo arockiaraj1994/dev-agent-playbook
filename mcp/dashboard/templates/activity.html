@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Activity — {{ server_label }}{% endblock %}
+{% block crumb %}Recent activity{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Recent activity</h1>
+    <p class="page-sub">Last {{ calls | length }} tool calls across your team</p>
+  </div>
+  <div class="page-actions">
+    <a href="/dashboard/activity" class="btn">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export CSV
+    </a>
+  </div>
+</div>
+
+<!-- Filter row -->
+<div class="filter-row">
+  <div class="filter-input">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <input id="activity-search" placeholder="Filter by user, tool, or args…" autocomplete="off">
+  </div>
+  <div class="chip-row" id="activity-chips">
+    <span class="chip active" data-filter="all">All</span>
+    <span class="chip" data-filter="ok">OK</span>
+    <span class="chip" data-filter="empty">Empty</span>
+    <span class="chip" data-filter="not_found">Not found</span>
+    <span class="chip" data-filter="error">Errors</span>
+  </div>
+</div>
+
+{% if not calls %}
+  <div class="empty">No tool calls recorded yet.</div>
+{% else %}
+<div class="panel">
+  <div class="panel-body flush">
+    <table class="grid" id="activity-table">
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>User</th>
+          <th>Editor</th>
+          <th>Tool</th>
+          <th>Args</th>
+          <th class="num">Latency</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in calls %}
+        <tr data-status="{{ c.status }}">
+          <td class="muted">{{ c.created_at | since }}</td>
+          <td>
+            <div class="user-cell">
+              <div class="avatar" data-name="{{ c.user_name }}" style="width:22px;height:22px;font-size:9px">
+                {{ c.user_name[0].upper() }}
+              </div>
+              <a href="/dashboard/users/{{ c.user_name }}">{{ c.user_name }}</a>
+            </div>
+          </td>
+          <td class="muted">{{ c.editor_name or "—" }}</td>
+          <td><code>{{ c.tool_name }}</code></td>
+          <td class="muted truncate">{{ c.args_summary }}</td>
+          <td class="num">{{ c.latency_ms }}ms</td>
+          <td>
+            {% if c.status == "ok" %}
+              <span class="badge green">ok</span>
+            {% elif c.status == "empty" %}
+              <span class="badge amber">empty</span>
+            {% elif c.status == "not_found" %}
+              <span class="badge amber">not found</span>
+            {% else %}
+              <span class="badge red">{{ c.status }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block page_script %}
+<script>
+initTableFilter({
+  inputId: 'activity-search',
+  chipsSelector: '#activity-chips .chip',
+  tableId: 'activity-table',
+  statusAttr: 'status'
+});
+</script>
+{% endblock %}

@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Tooling caches
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local environment overrides
+.env
+.env.local
+*.local
+
+# Runtime data (metrics DB)
+mcp/data/
+
+# Build artifacts
+dist/
+build/
+
+# Private project rule docs (never check in)
+baton-sso-config/
+integration-manager/

@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}{{ detail.user_name }} — {{ server_label }}{% endblock %}
+{% block crumb %}<a href="/dashboard/users">Users</a>{% endblock %}
+{% block crumb_extra %}
+  <span class="crumbs-sep">›</span>
+  <span class="current">{{ detail.user_name }}</span>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <a href="/dashboard/users" class="btn" style="margin-bottom:16px">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(180deg)"><polyline points="9 18 15 12 9 6"/></svg>
+      Back
+    </a>
+  </div>
+</div>
+
+<!-- Detail header -->
+<div class="detail-header">
+  <div class="detail-avatar" data-name="{{ detail.user_name }}">
+    {{ detail.user_name[0].upper() }}
+  </div>
+  <div style="flex:1">
+    <h1 class="detail-name">
+      {{ detail.user_name }}
+      {% if detail.status == "active" %}
+        <span class="badge green"><span class="badge-dot"></span>active</span>
+      {% elif detail.status == "inactive" %}
+        <span class="badge amber"><span class="badge-dot"></span>inactive</span>
+      {% else %}
+        <span class="badge grey"><span class="badge-dot"></span>never called</span>
+      {% endif %}
+    </h1>
+    <div class="detail-meta">
+      <span>user_id: <code>{{ detail.user_id }}</code></span>
+      <span>·</span>
+      <span>First seen {{ detail.first_seen | short_dt }}</span>
+      <span>·</span>
+      <span>Last call <strong style="color:var(--text)">{{ detail.last_seen | since }}</strong></span>
+    </div>
+  </div>
+</div>
+
+<!-- KPI grid -->
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="kpi-label">Calls total</div>
+    <div class="kpi-value">{{ detail.calls_total }}</div>
+    <div class="kpi-foot"><span class="muted">since first call</span></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Last 24h</div>
+    <div class="kpi-value">{{ detail.calls_24h }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Last 7d</div>
+    <div class="kpi-value">{{ detail.calls_7d }}</div>
+    {% if detail.calls_7d > 0 %}
+    <div class="kpi-foot"><span class="muted">{{ (detail.calls_7d / 7) | round(0) | int }} avg/day</span></div>
+    {% endif %}
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Editors</div>
+    <div class="kpi-value">{{ detail.editors | length }}</div>
+    <div class="kpi-foot"><span class="muted">connected editors</span></div>
+  </div>
+</div>
+
+<!-- Detail grid -->
+<div class="detail-grid">
+
+  <!-- Left: Recent calls -->
+  <div class="detail-col">
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Recent calls</h2>
+      </div>
+      <div class="panel-body flush">
+        {% if not detail.recent_calls %}
+          <div class="empty">No tool calls yet.</div>
+        {% else %}
+        <table class="grid">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Editor</th>
+              <th>Tool</th>
+              <th>Args</th>
+              <th class="num">Latency</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in detail.recent_calls %}
+            <tr>
+              <td class="muted">{{ c.created_at | since }}</td>
+              <td class="muted">{{ c.editor_name or "—" }}</td>
+              <td><code>{{ c.tool_name }}</code></td>
+              <td class="muted truncate">{{ c.args_summary }}</td>
+              <td class="num">{{ c.latency_ms }}ms</td>
+              <td>
+                {% if c.status == "ok" %}
+                  <span class="badge green">ok</span>
+                {% elif c.status == "empty" %}
+                  <span class="badge amber">empty</span>
+                {% elif c.status == "not_found" %}
+                  <span class="badge amber">not found</span>
+                {% else %}
+                  <span class="badge red">{{ c.status }}</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Editors + Top tools -->
+  <div class="detail-col">
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Editors</h2>
+      </div>
+      <div class="panel-body flush">
+        {% if not detail.editors %}
+          <div class="empty">No editors connected.</div>
+        {% else %}
+        <table class="grid">
+          <thead>
+            <tr><th>Editor</th><th>Version</th><th>Last init</th></tr>
+          </thead>
+          <tbody>
+            {% for name, version, last_init in detail.editors %}
+            <tr>
+              <td><span class="editor-tag">{{ name }}</span></td>
+              <td class="muted mono">{{ version or "—" }}</td>
+              <td class="muted">{{ last_init | since }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Top tools</h2>
+      </div>
+      <div class="panel-body flush">
+        {% if not detail.top_tools %}
+          <div class="empty">No tool calls yet.</div>
+        {% else %}
+          {% set max_n = detail.top_tools[0][1] %}
+          {% for tool, n in detail.top_tools %}
+          <div class="bar-row">
+            <span class="name">{{ tool }}</span>
+            <div class="bar">
+              <div class="bar-fill" style="width:{{ ((n / max_n) * 100) | round(1) }}%"></div>
+            </div>
+            <span class="count">{{ n }}</span>
+          </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}
+
+{% block page_script %}
+<script>
+/* Color the detail avatar */
+(function () {
+  document.querySelectorAll('.detail-avatar[data-name]').forEach(function (el) {
+    var name = el.dataset.name;
+    var h = 0;
+    for (var i = 0; i < name.length; i++) h += name.charCodeAt(i);
+    var hue = h % 360;
+    var hue2 = (hue + 30) % 360;
+    el.style.background =
+      'linear-gradient(135deg, hsl(' + hue + ' 65% 70%), hsl(' + hue2 + ' 60% 50%))';
+  });
+})();
+</script>
+{% endblock %}

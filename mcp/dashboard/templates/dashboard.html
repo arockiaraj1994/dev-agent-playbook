@@ -1,0 +1,446 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — {{ server_label }}{% endblock %}
+{% block crumb %}Dashboard{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-sub">Live view of your team's MCP usage · {{ summary.connected }} editor{% if summary.connected != 1 %}s{% endif %} connected right now</p>
+  </div>
+  <div class="page-actions">
+    <div class="chip-row" id="range-chips">
+      <span class="chip active" data-range="24h">24h</span>
+      <span class="chip" data-range="7d">7d</span>
+      <span class="chip" data-range="30d">30d</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── KPI grid ────────────────────────────────────────────────── -->
+<div class="kpi-grid">
+
+  <!-- Currently connected -->
+  <div class="kpi">
+    <div class="kpi-label">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-subtle)"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+      Currently connected
+    </div>
+    <div class="kpi-value indigo">{{ summary.connected }}</div>
+    <div class="kpi-foot">
+      <span class="badge live"><span class="badge-dot"></span>open SSE</span>
+      <span>initialized in last 4h</span>
+    </div>
+  </div>
+
+  <!-- Tool calls 24h -->
+  <div class="kpi">
+    <div class="kpi-label">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-subtle)"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      Tool calls (24h)
+    </div>
+    <div class="kpi-value">{{ summary.calls_today }}</div>
+    <div class="kpi-foot">
+      {% if summary.calls_trend > 0 %}
+        <span class="kpi-trend up">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
+          +{{ summary.calls_trend }}%
+        </span>
+      {% elif summary.calls_trend < 0 %}
+        <span class="kpi-trend down">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7 7 17"/><path d="M17 17H7V7"/></svg>
+          {{ summary.calls_trend }}%
+        </span>
+      {% else %}
+        <span class="kpi-trend">—</span>
+      {% endif %}
+      <span>vs yesterday</span>
+    </div>
+    <div class="kpi-spark" id="spark-calls"></div>
+  </div>
+
+  <!-- Active vs inactive -->
+  <div class="kpi">
+    <div class="kpi-label">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-subtle)"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Active vs inactive
+    </div>
+    <div style="display:flex;align-items:baseline;gap:10px">
+      <span class="kpi-value green">{{ summary.active }}</span>
+      <span class="muted">/ {{ summary.configured }}</span>
+    </div>
+    <div class="kpi-foot" style="gap:12px">
+      <span>
+        <span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:var(--amber-500);margin-right:4px"></span>
+        {{ summary.inactive }} inactive
+      </span>
+      <span>
+        <span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:var(--text-subtle);margin-right:4px"></span>
+        {{ summary.never_called }} never called
+      </span>
+    </div>
+  </div>
+
+  <!-- Zero-result searches -->
+  <div class="kpi">
+    <div class="kpi-label">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-subtle)"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      Zero-result searches
+    </div>
+    <div class="kpi-value {% if summary.zero_today > 0 %}amber{% endif %}">{{ summary.zero_today }}</div>
+    <div class="kpi-foot">
+      {% if summary.zero_trend > 0 %}
+        <span class="kpi-trend down">↑{{ summary.zero_trend }}</span>
+      {% elif summary.zero_trend < 0 %}
+        <span class="kpi-trend up">↓{{ summary.zero_trend | abs }}</span>
+      {% endif %}
+      <span>rule-doc gaps to investigate</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Chart grid: area chart + Live now ────────────────────────── -->
+<div class="chart-grid">
+
+  <!-- Calls over time -->
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <h2 class="panel-title">Tool calls — last 24 hours</h2>
+        <div class="panel-sub">Hourly volume by status</div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="background:var(--indigo-500)"></span>ok</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--red-500)"></span>errors</span>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div id="chart-hourly" style="width:100%;height:240px"></div>
+    </div>
+  </div>
+
+  <!-- Live now -->
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <h2 class="panel-title">Live now</h2>
+        <div class="panel-sub">Initialized in last 4 hours</div>
+      </div>
+      <span class="badge live"><span class="badge-dot"></span>{{ summary.connected }}</span>
+    </div>
+    <div class="panel-body flush">
+      {% if not summary.live_users %}
+        <div class="empty" style="margin:16px">No active connections right now.</div>
+      {% else %}
+      <div class="live-list">
+        {% for u in summary.live_users %}
+        <div class="live-item">
+          <div class="avatar" data-name="{{ u.user_name }}" style="width:26px;height:26px;font-size:11px">
+            {{ u.user_name[0].upper() }}
+          </div>
+          <div class="meta">
+            <div class="name">{{ u.user_name }}</div>
+            <div class="where">{{ u.editor }} · {{ u.calls_24h }} calls today</div>
+          </div>
+          <span class="when">{{ u.last_call | since }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Bottom row: Top tools + Search activity ──────────────────── -->
+<div class="chart-row">
+
+  <!-- Top tools -->
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <h2 class="panel-title">Top tools (24h)</h2>
+        <div class="panel-sub">By call volume</div>
+      </div>
+      <a href="/dashboard/tools" class="btn btn-ghost" style="font-size:12px">
+        View all
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+    </div>
+    <div class="panel-body flush">
+      {% if not summary.top_tools %}
+        <div class="empty" style="margin:16px">No tool calls in the last 24h.</div>
+      {% else %}
+        {% for t in summary.top_tools %}
+        <div class="bar-row">
+          <span class="name">{{ t.tool }}</span>
+          <div class="bar"><div class="bar-fill" style="width:{{ (t.share * 100) | round(1) }}%"></div></div>
+          <span class="count">{{ t.calls }}</span>
+        </div>
+        {% endfor %}
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Search activity 7d -->
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <h2 class="panel-title">Search activity (7d)</h2>
+        <div class="panel-sub">By tool family</div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="background:var(--indigo-500)"></span>search</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--indigo-300)"></span>get</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--indigo-100);border:1px solid var(--indigo-200)"></span>list</span>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div id="chart-daily" style="width:100%;height:220px"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Recent activity ───────────────────────────────────────────── -->
+<div class="panel">
+  <div class="panel-header">
+    <div>
+      <h2 class="panel-title">Recent activity</h2>
+      <div class="panel-sub">Latest tool calls across all users</div>
+    </div>
+    <a href="/dashboard/activity" class="btn btn-ghost" style="font-size:12px">
+      Open feed
+      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </a>
+  </div>
+  <div class="panel-body flush">
+    {% if not calls %}
+      <div class="empty" style="margin:16px">No tool calls recorded yet.</div>
+    {% else %}
+    <table class="grid">
+      <thead>
+        <tr>
+          <th>When</th><th>User</th><th>Editor</th><th>Tool</th><th>Args</th>
+          <th class="num">Latency</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in calls %}
+        <tr>
+          <td class="muted">{{ c.created_at | since }}</td>
+          <td>
+            <div class="user-cell">
+              <div class="avatar" data-name="{{ c.user_name }}" style="width:22px;height:22px;font-size:9px">
+                {{ c.user_name[0].upper() }}
+              </div>
+              <a href="/dashboard/users/{{ c.user_name }}">{{ c.user_name }}</a>
+            </div>
+          </td>
+          <td class="muted">{{ c.editor_name or "—" }}</td>
+          <td><code>{{ c.tool_name }}</code></td>
+          <td class="muted truncate">{{ c.args_summary }}</td>
+          <td class="num">{{ c.latency_ms }}ms</td>
+          <td>
+            {% if c.status == "ok" %}
+              <span class="badge green">ok</span>
+            {% elif c.status == "empty" %}
+              <span class="badge amber">empty</span>
+            {% elif c.status == "not_found" %}
+              <span class="badge amber">not found</span>
+            {% else %}
+              <span class="badge red">{{ c.status }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block page_script %}
+<script>
+/* ── Chart data injected from server ─────────────────────── */
+var HOURLY = {{ hourly_json | safe }};
+var DAILY  = {{ daily_json | safe }};
+
+/* ── Tiny SVG chart library ──────────────────────────────── */
+(function () {
+
+  /* Helper: compute SVG path string from array of [x,y] points */
+  function pts2path(pts) {
+    return pts.map(function (p, i) {
+      return (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1);
+    }).join(' ');
+  }
+
+  function svgEl(tag, attrs) {
+    var el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    Object.keys(attrs).forEach(function (k) { el.setAttribute(k, attrs[k]); });
+    return el;
+  }
+
+  /* ── Area / line chart (hourly calls) ───────────────────── */
+  function drawAreaLine(containerId, data, series, height) {
+    var wrap = document.getElementById(containerId);
+    if (!wrap) return;
+    var pad = { l: 36, r: 12, t: 12, b: 28 };
+    var width = wrap.offsetWidth || 600;
+    var innerW = Math.max(50, width - pad.l - pad.r);
+    var innerH = height - pad.t - pad.b;
+
+    var allVals = [];
+    series.forEach(function (s) { data.forEach(function (d) { allVals.push(d[s.key] || 0); }); });
+    var maxV = Math.max.apply(null, allVals.concat([1]));
+    var niceMax = Math.ceil(maxV / 50) * 50 || 50;
+    var yTicks = 4;
+
+    var stepX = innerW / (data.length - 1 || 1);
+    var toX = function (i) { return pad.l + i * stepX; };
+    var toY = function (v) { return pad.t + innerH - (v / niceMax) * innerH; };
+
+    var svg = svgEl('svg', { width: width, height: height, viewBox: '0 0 ' + width + ' ' + height });
+
+    /* Y grid */
+    for (var yi = 0; yi <= yTicks; yi++) {
+      var v = Math.round((niceMax / yTicks) * yi);
+      var gy = toY(v);
+      svg.appendChild(svgEl('line', {
+        x1: pad.l, x2: width - pad.r, y1: gy, y2: gy,
+        stroke: 'var(--border)', 'stroke-width': 1,
+        'stroke-dasharray': yi === 0 ? '0' : '2 4'
+      }));
+      var lbl = svgEl('text', {
+        x: pad.l - 8, y: gy + 4, 'font-size': '10.5',
+        fill: 'var(--text-subtle)', 'text-anchor': 'end',
+        'font-family': 'var(--font-mono)'
+      });
+      lbl.textContent = v;
+      svg.appendChild(lbl);
+    }
+
+    /* X labels every 4th hour */
+    data.forEach(function (d, i) {
+      if (i % 4 !== 0) return;
+      var lbl = svgEl('text', {
+        x: toX(i), y: height - 8, 'font-size': '10.5',
+        fill: 'var(--text-subtle)', 'text-anchor': 'middle',
+        'font-family': 'var(--font-mono)'
+      });
+      lbl.textContent = String(d.h || i).padStart(2, '0') + ':00';
+      svg.appendChild(lbl);
+    });
+
+    /* Series */
+    series.forEach(function (s) {
+      var pts = data.map(function (d, i) { return [toX(i), toY(d[s.key] || 0)]; });
+      var lineD = pts2path(pts);
+      var areaD = lineD +
+        ' L' + toX(data.length - 1).toFixed(1) + ',' + toY(0).toFixed(1) +
+        ' L' + toX(0).toFixed(1) + ',' + toY(0).toFixed(1) + ' Z';
+      if (s.fill) {
+        svg.appendChild(svgEl('path', { d: areaD, fill: s.fill, opacity: '0.5' }));
+      }
+      svg.appendChild(svgEl('path', {
+        d: lineD, fill: 'none', stroke: s.stroke,
+        'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round'
+      }));
+    });
+
+    wrap.innerHTML = '';
+    wrap.appendChild(svg);
+  }
+
+  /* ── Stacked bar chart (7-day daily) ────────────────────── */
+  function drawStackedBars(containerId, data, keys, colors, height) {
+    var wrap = document.getElementById(containerId);
+    if (!wrap) return;
+    var pad = { l: 36, r: 12, t: 12, b: 28 };
+    var width = wrap.offsetWidth || 400;
+    var innerW = Math.max(50, width - pad.l - pad.r);
+    var innerH = height - pad.t - pad.b;
+
+    var totals = data.map(function (d) {
+      return keys.reduce(function (s, k) { return s + (d[k] || 0); }, 0);
+    });
+    var maxV = Math.max.apply(null, totals.concat([1]));
+    var niceMax = Math.ceil(maxV / 100) * 100 || 100;
+    var yTicks = 4;
+
+    var bandW = innerW / data.length;
+    var barW  = Math.min(34, bandW * 0.55);
+
+    var svg = svgEl('svg', { width: width, height: height });
+
+    /* Y grid */
+    for (var yi = 0; yi <= yTicks; yi++) {
+      var v = Math.round((niceMax / yTicks) * yi);
+      var gy = pad.t + innerH - (v / niceMax) * innerH;
+      svg.appendChild(svgEl('line', {
+        x1: pad.l, x2: width - pad.r, y1: gy, y2: gy,
+        stroke: 'var(--border)', 'stroke-dasharray': yi === 0 ? '0' : '2 4'
+      }));
+      var lbl = svgEl('text', {
+        x: pad.l - 8, y: gy + 4, 'font-size': '10.5',
+        fill: 'var(--text-subtle)', 'text-anchor': 'end',
+        'font-family': 'var(--font-mono)'
+      });
+      lbl.textContent = v;
+      svg.appendChild(lbl);
+    }
+
+    /* Bars */
+    data.forEach(function (d, i) {
+      var cx = pad.l + bandW * i + bandW / 2;
+      var cy = pad.t + innerH;
+      keys.forEach(function (k, ki) {
+        var val = d[k] || 0;
+        var hPx = (val / niceMax) * innerH;
+        cy -= hPx;
+        svg.appendChild(svgEl('rect', {
+          x: cx - barW / 2, y: cy, width: barW, height: hPx,
+          fill: colors[ki], rx: ki === keys.length - 1 ? '3' : '0'
+        }));
+      });
+      var lbl = svgEl('text', {
+        x: cx, y: height - 8, 'font-size': '10.5',
+        fill: 'var(--text-subtle)', 'text-anchor': 'middle'
+      });
+      lbl.textContent = d.label || '';
+      svg.appendChild(lbl);
+    });
+
+    wrap.innerHTML = '';
+    wrap.appendChild(svg);
+  }
+
+  /* ── Render both charts ─────────────────────────────────── */
+  function render() {
+    drawAreaLine('chart-hourly', HOURLY, [
+      { key: 'ok',  stroke: 'var(--indigo-500)', fill: 'var(--indigo-100)' },
+      { key: 'err', stroke: 'var(--red-500)',    fill: 'var(--red-100)' }
+    ], 240);
+
+    drawStackedBars('chart-daily', DAILY,
+      ['list', 'get', 'search'],
+      ['var(--indigo-100)', 'var(--indigo-300)', 'var(--indigo-500)'],
+      220);
+  }
+
+  /* Render once on load, re-render on resize */
+  render();
+  var resizeTimer;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(render, 120);
+  });
+
+})();
+</script>
+{% endblock %}

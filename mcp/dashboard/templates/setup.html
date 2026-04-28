@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+{% block title %}Setup — {{ server_label }}{% endblock %}
+{% block crumb %}Setup{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Setup</h1>
+    <p class="page-sub">Connect your editor to this MCP server, and learn how to add new rule docs</p>
+  </div>
+</div>
+
+<div class="setup-layout">
+
+  <!-- TOC -->
+  <nav class="toc" id="setup-toc">
+    <div class="toc-section">Get started</div>
+    <a href="#server"  class="active" data-toc="server">Your server URL</a>
+    <a href="#editors" data-toc="editors">Connect an editor</a>
+    <div class="toc-section">Manage</div>
+    <a href="#rules"   data-toc="rules">Add project rules</a>
+    <a href="#verify"  data-toc="verify">Verify it works</a>
+  </nav>
+
+  <!-- Content -->
+  <div>
+
+    <!-- Server URL -->
+    <section class="doc-section" id="server">
+      <h2>Your server URL</h2>
+      <p class="lede">Use this SSE endpoint in every editor config below. Anyone with the URL + a valid auth token can connect.</p>
+      <div class="code-wrap">
+        <pre class="code-block">{{ sse_url }}</pre>
+        <button class="code-copy">copy</button>
+      </div>
+      <div class="callout">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        <div>If your server requires authentication, generate a personal token from <strong>Settings → Tokens</strong>. Tokens are scoped per user so usage attributes correctly in this dashboard.</div>
+      </div>
+    </section>
+
+    <!-- Connect an editor -->
+    <section class="doc-section" id="editors">
+      <h2>Connect an editor</h2>
+      <p class="lede">Pick your editor below. After connecting, restart the editor and trigger a tool call — your username will appear under <a href="/dashboard/">Users</a>.</p>
+
+      <div class="tab-row" id="editor-tabs">
+        <div class="tab active" data-tab="claude">
+          <span style="width:14px;height:14px;border-radius:4px;background:linear-gradient(135deg,#D97757,#A85740);display:inline-block;flex-shrink:0"></span>
+          Claude Code
+        </div>
+        <div class="tab" data-tab="cursor">
+          <span style="width:14px;height:14px;border-radius:4px;background:#000;display:inline-block;flex-shrink:0"></span>
+          Cursor
+        </div>
+        <div class="tab" data-tab="windsurf">
+          <span style="width:14px;height:14px;border-radius:4px;background:linear-gradient(135deg,#41E0CF,#0EA5A5);display:inline-block;flex-shrink:0"></span>
+          Windsurf
+        </div>
+      </div>
+
+      <!-- Claude Code -->
+      <div class="tab-panel" id="tab-claude">
+        <h3>1. Add the server</h3>
+        <p>Run once in your terminal — this writes to your user-level Claude Code config:</p>
+        <div class="code-wrap">
+          <pre class="code-block">claude mcp add {{ server_label }} --transport sse {{ sse_url }}</pre>
+          <button class="code-copy">copy</button>
+        </div>
+
+        <h3>2. With authentication</h3>
+        <p>If the server requires a token, pass it as a header:</p>
+        <div class="code-wrap">
+          <pre class="code-block">claude mcp add {{ server_label }} --transport sse \
+  --header "Authorization: Bearer $YOUR_TOKEN" \
+  {{ sse_url }}</pre>
+          <button class="code-copy">copy</button>
+        </div>
+
+        <h3>3. Project-scoped install (optional)</h3>
+        <p>To make the server available only inside one repository, run the same command from inside the repo with <code>--scope project</code>:</p>
+        <div class="code-wrap">
+          <pre class="code-block">cd ~/code/my-app
+claude mcp add {{ server_label }} --transport sse --scope project {{ sse_url }}</pre>
+          <button class="code-copy">copy</button>
+        </div>
+
+        <h3>4. Verify</h3>
+        <p>List MCP servers to confirm it registered:</p>
+        <div class="code-wrap">
+          <pre class="code-block">claude mcp list</pre>
+          <button class="code-copy">copy</button>
+        </div>
+      </div>
+
+      <!-- Cursor -->
+      <div class="tab-panel hidden" id="tab-cursor">
+        <h3>1. Edit your MCP config</h3>
+        <p>Open <code>~/.cursor/mcp.json</code> (create it if missing) and add:</p>
+        <div class="code-wrap">
+          <pre class="code-block">{
+  "mcpServers": {
+    "{{ server_label }}": {
+      "url": "{{ sse_url }}"
+    }
+  }
+}</pre>
+          <button class="code-copy">copy</button>
+        </div>
+
+        <h3>2. With authentication</h3>
+        <div class="code-wrap">
+          <pre class="code-block">{
+  "mcpServers": {
+    "{{ server_label }}": {
+      "url": "{{ sse_url }}",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
+      }
+    }
+  }
+}</pre>
+          <button class="code-copy">copy</button>
+        </div>
+
+        <h3>3. Project-scoped install</h3>
+        <p>For per-project config, create <code>.cursor/mcp.json</code> at your repo root with the same structure. Cursor merges project + user configs at runtime.</p>
+
+        <h3>4. Restart Cursor</h3>
+        <p>Fully quit and reopen Cursor (don't just reload the window). Open the MCP panel in settings to see the server's status indicator turn green.</p>
+      </div>
+
+      <!-- Windsurf -->
+      <div class="tab-panel hidden" id="tab-windsurf">
+        <h3>1. Edit your MCP config</h3>
+        <p>Open <code>~/.codeium/windsurf/mcp_config.json</code> and add:</p>
+        <div class="code-wrap">
+          <pre class="code-block">{
+  "mcpServers": {
+    "{{ server_label }}": {
+      "serverUrl": "{{ sse_url }}"
+    }
+  }
+}</pre>
+          <button class="code-copy">copy</button>
+        </div>
+
+        <h3>2. With authentication</h3>
+        <div class="code-wrap">
+          <pre class="code-block">{
+  "mcpServers": {
+    "{{ server_label }}": {
+      "serverUrl": "{{ sse_url }}",
+      "headers": { "Authorization": "Bearer YOUR_TOKEN" }
+    }
+  }
+}</pre>
+          <button class="code-copy">copy</button>
+        </div>
+
+        <h3>3. Restart</h3>
+        <p>Restart Windsurf, then open Cascade and confirm the server appears in the MCP server list.</p>
+      </div>
+    </section>
+
+    <!-- Add project rules -->
+    <section class="doc-section" id="rules">
+      <h2>Add project rules</h2>
+      <p class="lede">Rules, architecture docs, and skills are markdown files indexed for search. Anyone on your team can add them — here's how.</p>
+
+      <h3>1. Choose a namespace</h3>
+      <p>Drop your file under one of three folders in the <code>rules-repo</code>:</p>
+      <ul>
+        <li><code>rules/</code> — coding standards, conventions, "do this not that" guidance</li>
+        <li><code>arch/</code> — architecture overviews, system designs, ADRs</li>
+        <li><code>skills/</code> — runbooks, checklists, multi-step procedures</li>
+      </ul>
+
+      <h3>2. Write the doc</h3>
+      <p>Add a frontmatter block with at minimum <code>title</code> and <code>tags</code>. Tags weight the search index heavily — use the words your team would actually type.</p>
+      <div class="code-wrap">
+        <pre class="code-block">---
+title: API error handling
+tags: [api, errors, http, status-codes]
+projects: [payments-svc, api-gateway]
+---
+
+# API error handling
+
+When a request fails, return a JSON envelope:
+
+```json
+{ "error": { "code": "RATE_LIMITED", "message": "..." } }
+```
+
+...</pre>
+        <button class="code-copy">copy</button>
+      </div>
+
+      <h3>3. Open a PR</h3>
+      <p>Push the file, open a PR against <code>main</code>. The CI bot will:</p>
+      <ol>
+        <li>Lint frontmatter (title, tags required)</li>
+        <li>Re-index the SQLite FTS table</li>
+        <li>Hot-reload the server (no restart needed)</li>
+      </ol>
+      <div class="callout">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/></svg>
+        <div>Watch the <a href="/dashboard/searches"><strong>Searches → Zero-result</strong></a> tab — every entry there is a doc your team is asking for. Pick one, write it, and you'll see the badge clear in real time.</div>
+      </div>
+
+      <h3>4. Pin to specific projects (optional)</h3>
+      <p>Use the <code>projects:</code> frontmatter array to scope a doc. Calls from <code>list_projects → search_rules(project=…)</code> will return scoped results first.</p>
+    </section>
+
+    <!-- Verify -->
+    <section class="doc-section" id="verify">
+      <h2>Verify it works</h2>
+      <ol class="checklist">
+        <li>Restart your editor after adding the MCP server.</li>
+        <li>Ask your AI: <em>"list available projects"</em> — you should see the project names returned from this server.</li>
+        <li>Ask your AI: <em>"search rules for error handling"</em> — you should see relevant rule doc results inlined.</li>
+        <li>Open the <a href="/dashboard/">Users page</a> — your username should appear with an <span class="badge green"><span class="badge-dot"></span>active</span> badge after your first call.</li>
+      </ol>
+    </section>
+
+  </div><!-- /content -->
+</div><!-- /setup-layout -->
+
+{% endblock %}
+
+{% block page_script %}
+<script>
+/* Editor tabs */
+initTabs('#editor-tabs', 'tab-');
+
+/* TOC scrollspy */
+(function () {
+  var ids = ['server', 'editors', 'rules', 'verify'];
+  var links = document.querySelectorAll('#setup-toc a[data-toc]');
+
+  function onScroll() {
+    var fromTop = (document.querySelector('.main') || window).scrollTop || window.scrollY;
+    var best = ids[0];
+    ids.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && el.getBoundingClientRect().top < 140) best = id;
+    });
+    links.forEach(function (a) {
+      a.classList.toggle('active', a.dataset.toc === best);
+    });
+  }
+
+  var main = document.querySelector('.main');
+  if (main) main.addEventListener('scroll', onScroll);
+  window.addEventListener('scroll', onScroll);
+})();
+</script>
+{% endblock %}

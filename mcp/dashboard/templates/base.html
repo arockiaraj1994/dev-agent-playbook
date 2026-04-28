@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ server_label }} — MCP dashboard{% endblock %}</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/dashboard/static/style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ── Sidebar ─────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">M</div>
+      <div>
+        <div class="brand-name">{{ server_label }}</div>
+        <span class="brand-sub">MCP server</span>
+      </div>
+    </div>
+
+    <div class="nav-section-label">Overview</div>
+    <a href="/dashboard/" class="nav-item {% if page == 'dashboard' %}active{% endif %}">
+      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+      Dashboard
+    </a>
+    <a href="/dashboard/users" class="nav-item {% if page == 'users' %}active{% endif %}">
+      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Users
+    </a>
+    <a href="/dashboard/activity" class="nav-item {% if page == 'activity' %}active{% endif %}">
+      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Activity
+    </a>
+
+    <div class="nav-section-label">Analytics</div>
+    <a href="/dashboard/tools" class="nav-item {% if page == 'tools' %}active{% endif %}">
+      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 1-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 1 6-6 4.5 4.5 0 0 1-3-3z"/></svg>
+      Tools
+    </a>
+    <a href="/dashboard/searches" class="nav-item {% if page == 'searches' %}active{% endif %}">
+      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      Searches
+    </a>
+
+    <div class="nav-section-label">Manage</div>
+    <a href="/dashboard/setup" class="nav-item {% if page == 'setup' %}active{% endif %}">
+      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Setup
+    </a>
+
+    <div class="sidebar-footer">
+      <span class="health-dot"></span>
+      <span>Server healthy</span>
+    </div>
+  </aside>
+
+  <!-- ── Main ────────────────────────────────────── -->
+  <div class="main">
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="crumbs">
+        <span>{{ server_label }}</span>
+        <span class="crumbs-sep">›</span>
+        <span class="current">{% block crumb %}{% endblock %}</span>
+        {% block crumb_extra %}{% endblock %}
+      </div>
+      <div class="topbar-actions">
+        <div class="search-bar">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <span>Search…</span>
+          <span class="kbd">⌘K</span>
+        </div>
+        {% if principal %}
+        <div class="user-chip">
+          <div class="avatar" data-name="{{ principal.user_name }}">{{ principal.user_name[0].upper() }}</div>
+          <span>{{ principal.user_name }}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+        {% else %}
+        <div class="user-chip">
+          <div class="avatar">?</div>
+          <span class="muted">anonymous</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Page content -->
+    <div class="content">
+      {% block content %}{% endblock %}
+    </div>
+
+    <!-- Footer -->
+    <div class="app-footer">
+      <span>Inactive threshold: {{ inactive_days }} day{% if inactive_days != 1 %}s{% endif %}</span>
+      <span class="right">{{ server_label }} MCP server</span>
+    </div>
+
+  </div><!-- /.main -->
+</div><!-- /.app -->
+
+<script>
+/* ── Avatar color hashing ───────────────────────────────── */
+(function () {
+  function hashHue(name) {
+    var h = 0;
+    for (var i = 0; i < name.length; i++) h += name.charCodeAt(i);
+    return h % 360;
+  }
+  document.querySelectorAll('.avatar[data-name]').forEach(function (el) {
+    var hue = hashHue(el.dataset.name);
+    var hue2 = (hue + 30) % 360;
+    el.style.background =
+      'linear-gradient(135deg, hsl(' + hue + ' 65% 70%), hsl(' + hue2 + ' 60% 50%))';
+  });
+})();
+
+/* ── Table text + chip filter ───────────────────────────── */
+function initTableFilter(opts) {
+  /* opts: { inputId, chipsSelector, tableId, statusAttr } */
+  var input   = document.getElementById(opts.inputId);
+  var chips   = document.querySelectorAll(opts.chipsSelector);
+  var table   = document.getElementById(opts.tableId);
+  if (!table) return;
+  var rows    = table.querySelectorAll('tbody tr');
+  var active  = 'all';
+
+  function apply() {
+    var q = input ? input.value.toLowerCase() : '';
+    rows.forEach(function (tr) {
+      var text   = tr.textContent.toLowerCase();
+      var status = tr.dataset[opts.statusAttr || 'status'] || '';
+      var show   = (active === 'all' || status === active) &&
+                   (!q || text.includes(q));
+      tr.classList.toggle('hidden-row', !show);
+    });
+  }
+
+  if (input) input.addEventListener('input', apply);
+
+  chips.forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      active = chip.dataset.filter;
+      chips.forEach(function (c) { c.classList.remove('active'); });
+      chip.classList.add('active');
+      apply();
+    });
+  });
+}
+
+/* ── Setup tab switching ────────────────────────────────── */
+function initTabs(rowSelector, panelPrefix) {
+  var tabs = document.querySelectorAll(rowSelector + ' .tab');
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      tabs.forEach(function (t) { t.classList.remove('active'); });
+      tab.classList.add('active');
+      var target = tab.dataset.tab;
+      document.querySelectorAll('.tab-panel').forEach(function (p) {
+        p.classList.toggle('hidden', p.id !== panelPrefix + target);
+      });
+    });
+  });
+}
+
+/* ── Code copy buttons ──────────────────────────────────── */
+document.querySelectorAll('.code-copy').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var pre = btn.previousElementSibling;
+    if (!pre) return;
+    navigator.clipboard && navigator.clipboard.writeText(pre.textContent).then(function () {
+      var orig = btn.textContent;
+      btn.textContent = '✓ copied';
+      setTimeout(function () { btn.textContent = orig; }, 1400);
+    });
+  });
+});
+</script>
+
+{% block page_script %}{% endblock %}
+
+</body>
+</html>

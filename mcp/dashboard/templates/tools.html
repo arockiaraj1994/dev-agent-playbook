@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Tools — {{ server_label }}{% endblock %}
+{% block crumb %}Tools &amp; rule popularity{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Tools &amp; rule popularity</h1>
+    <p class="page-sub">Which MCP tools and rule docs your team relies on — last {{ window_days }}d</p>
+  </div>
+  <div class="page-actions">
+    <div class="chip-row">
+      <a href="?days=1"  class="chip {% if window_days == 1  %}active{% endif %}">24h</a>
+      <a href="?days=7"  class="chip {% if window_days == 7  %}active{% endif %}">7d</a>
+      <a href="?days=30" class="chip {% if window_days == 30 %}active{% endif %}">30d</a>
+    </div>
+  </div>
+</div>
+
+<!-- KPI grid -->
+{% set total_calls = tool_stats | sum(attribute='calls') %}
+{% set total_errors = tool_stats | sum(attribute='error_count') %}
+{% set tool_count = tool_stats | length %}
+
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="kpi-label">Total calls</div>
+    <div class="kpi-value">{{ total_calls }}</div>
+    <div class="kpi-foot"><span class="muted">last {{ window_days }}d</span></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Avg p50 latency</div>
+    {% if tool_stats %}
+    <div class="kpi-value">{{ ((tool_stats | sum(attribute='p50_latency_ms')) / tool_count) | round(0) | int }}<span class="muted" style="font-size:14px;font-weight:400">ms</span></div>
+    {% else %}
+    <div class="kpi-value" style="color:var(--text-subtle)">—</div>
+    {% endif %}
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Avg p95 latency</div>
+    {% if tool_stats %}
+    <div class="kpi-value">{{ ((tool_stats | sum(attribute='p95_latency_ms')) / tool_count) | round(0) | int }}<span class="muted" style="font-size:14px;font-weight:400">ms</span></div>
+    {% else %}
+    <div class="kpi-value" style="color:var(--text-subtle)">—</div>
+    {% endif %}
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Total errors</div>
+    <div class="kpi-value {% if total_errors > 0 %}amber{% endif %}">{{ total_errors }}</div>
+    <div class="kpi-foot"><span class="muted">across all tools</span></div>
+  </div>
+</div>
+
+<!-- Tool calls table + bar chart -->
+{% if not tool_stats %}
+  <div class="empty">No tool calls in this window.</div>
+{% else %}
+
+{% set max_calls = tool_stats[0].calls %}
+
+<div class="panel">
+  <div class="panel-header">
+    <div>
+      <h2 class="panel-title">Tool calls — last {{ window_days }}d</h2>
+      <div class="panel-sub">By tool name</div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
+    <!-- Bar rows -->
+    <div style="border-right:1px solid var(--border)">
+      {% for t in tool_stats %}
+      <div class="bar-row">
+        <span class="name">{{ t.tool_name }}</span>
+        <div class="bar">
+          <div class="bar-fill" style="width:{{ ((t.calls / max_calls) * 100) | round(1) }}%"></div>
+        </div>
+        <span class="count">{{ t.calls }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <!-- Stats table -->
+    <div>
+      <table class="grid">
+        <thead>
+          <tr>
+            <th>Tool</th>
+            <th class="num">p50</th>
+            <th class="num">p95</th>
+            <th class="num">Errors</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in tool_stats %}
+          <tr>
+            <td><code>{{ t.tool_name }}</code></td>
+            <td class="num">{{ t.p50_latency_ms | round(0) | int }}ms</td>
+            <td class="num">{{ t.p95_latency_ms | round(0) | int }}ms</td>
+            <td class="num">
+              {% if t.error_count > 0 %}
+                <span class="badge red">{{ t.error_count }}</span>
+              {% else %}
+                <span class="muted">0</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endif %}
+
+<!-- Doc fetches -->
+<div class="panel">
+  <div class="panel-header">
+    <div>
+      <h2 class="panel-title">Most fetched docs</h2>
+      <div class="panel-sub">get_* calls — last {{ window_days }}d</div>
+    </div>
+  </div>
+  <div class="panel-body flush">
+    {% if not doc_fetches %}
+      <div class="empty" style="margin:16px">No <code>get_*</code> calls in this window.</div>
+    {% else %}
+    <table class="grid">
+      <thead>
+        <tr>
+          <th>Doc</th>
+          <th class="num">Fetches</th>
+          <th>Last fetched</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in doc_fetches %}
+        <tr>
+          <td><code>{{ d.doc_path }}</code></td>
+          <td class="num">{{ d.fetches }}</td>
+          <td class="muted">{{ d.last_fetched | since }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

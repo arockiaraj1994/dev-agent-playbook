@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install MCP server deps
+        working-directory: mcp
+        run: uv sync
+      - name: Ruff check
+        working-directory: mcp
+        run: uv run ruff check .
+      - name: Ruff format check
+        working-directory: mcp
+        run: uv run ruff format --check .
+
+  validate-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run rule validator
+        run: python scripts/validate-rules.py
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install MCP server deps
+        working-directory: mcp
+        run: uv sync
+      - name: Run pytest
+        working-directory: mcp
+        run: uv run pytest -v

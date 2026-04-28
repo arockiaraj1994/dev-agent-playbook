@@ -1,0 +1,7 @@
+# Dev Agent Playbook MCP — optional settings (see MCP_CONFIG to override path).
+# When the file is missing, defaults match: enable.auth = false.
+
+[enable]
+# If true (SSE only), require Bearer tokens validated via Keycloak introspection
+# and set KEYCLOAK_URL, KEYCLOAK_REALM, MCP_CLIENT_ID, MCP_CLIENT_SECRET.
+auth = false

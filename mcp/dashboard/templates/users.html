@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Users — {{ server_label }}{% endblock %}
+{% block crumb %}Users &amp; adoption{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Users &amp; adoption</h1>
+    <p class="page-sub">Who's configured, who's actively using the server, and who needs a nudge</p>
+  </div>
+</div>
+
+<!-- KPI grid -->
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="kpi-label">Configured</div>
+    <div class="kpi-value">{{ summary.total }}</div>
+    <div class="kpi-foot"><span class="muted">total seats</span></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Active</div>
+    <div class="kpi-value green">{{ summary.active }}</div>
+    <div class="kpi-foot"><span class="muted">called in last {{ inactive_days }}d</span></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Inactive</div>
+    <div class="kpi-value amber">{{ summary.inactive }}</div>
+    <div class="kpi-foot"><span class="muted">no calls in {{ inactive_days }}+ days</span></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Never called</div>
+    <div class="kpi-value" style="color:var(--text-subtle)">{{ summary.never_called }}</div>
+    <div class="kpi-foot"><span class="muted">configured but unused</span></div>
+  </div>
+</div>
+
+<!-- Filter row -->
+<div class="filter-row">
+  <div class="filter-input">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <input id="user-search" placeholder="Search users…" autocomplete="off">
+  </div>
+  <div class="chip-row" id="user-chips">
+    <span class="chip active" data-filter="all">All</span>
+    <span class="chip" data-filter="active">Active</span>
+    <span class="chip" data-filter="inactive">Inactive</span>
+    <span class="chip" data-filter="never-called">Never called</span>
+  </div>
+</div>
+
+{% if not users %}
+  <div class="empty">No users have configured the MCP server yet.</div>
+{% else %}
+<div class="panel">
+  <div class="panel-body flush">
+    <table class="grid" id="users-table">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Editors</th>
+          <th>First seen</th>
+          <th>Last call</th>
+          <th class="num">24h</th>
+          <th class="num">7d</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr data-status="{{ u.status }}">
+          <td>
+            <div class="user-cell">
+              <div class="avatar" data-name="{{ u.user_name }}" style="width:24px;height:24px;font-size:10px">
+                {{ u.user_name[0].upper() }}
+              </div>
+              <a href="/dashboard/users/{{ u.user_name }}">{{ u.user_name }}</a>
+            </div>
+          </td>
+          <td>
+            {% if u.editors %}
+              <div class="editor-stack">
+                {% for ed in u.editors.split(', ') %}
+                  <span class="editor-tag">{{ ed }}</span>
+                {% endfor %}
+              </div>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td class="muted">{{ u.first_seen | short_dt }}</td>
+          <td class="muted">{{ u.last_seen | since }}</td>
+          <td class="num">{{ u.calls_24h }}</td>
+          <td class="num">{{ u.calls_7d }}</td>
+          <td>
+            {% if u.status == "active" %}
+              <span class="badge green"><span class="badge-dot"></span>active</span>
+            {% elif u.status == "inactive" %}
+              <span class="badge amber"><span class="badge-dot"></span>inactive</span>
+            {% else %}
+              <span class="badge grey"><span class="badge-dot"></span>never called</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block page_script %}
+<script>
+initTableFilter({
+  inputId: 'user-search',
+  chipsSelector: '#user-chips .chip',
+  tableId: 'users-table',
+  statusAttr: 'status'
+});
+</script>
+{% endblock %}

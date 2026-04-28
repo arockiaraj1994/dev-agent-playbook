@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Searches — {{ server_label }}{% endblock %}
+{% block crumb %}Search queries{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Search queries</h1>
+    <p class="page-sub">What your team is searching for — and where the rule-doc gaps are</p>
+  </div>
+</div>
+
+<!-- KPI grid -->
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="kpi-label">Recent searches</div>
+    <div class="kpi-value">{{ recent_searches | length }}</div>
+    <div class="kpi-foot"><span class="muted">in query log</span></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Avg relevance score</div>
+    {% set scored = recent_searches | selectattr('top_result_score') | list %}
+    {% if scored %}
+    <div class="kpi-value">{{ (scored | map(attribute='top_result_score') | sum / scored | length) | round(2) }}</div>
+    <div class="kpi-foot"><span class="muted">top result score</span></div>
+    {% else %}
+    <div class="kpi-value muted">—</div>
+    {% endif %}
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Zero results</div>
+    <div class="kpi-value {% if zero_result_searches %}amber{% endif %}">{{ zero_result_searches | length }}</div>
+    <div class="kpi-foot"><span class="muted">queries with no match</span></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Unique queries</div>
+    <div class="kpi-value">{{ recent_searches | map(attribute='query') | list | unique | list | length }}</div>
+    <div class="kpi-foot"><span class="muted">distinct search terms</span></div>
+  </div>
+</div>
+
+<!-- Zero-result queries -->
+<div class="panel">
+  <div class="panel-header">
+    <div>
+      <h2 class="panel-title">Zero-result queries</h2>
+      <div class="panel-sub">Each one is a rule-doc gap to investigate. Add a doc, mark resolved.</div>
+    </div>
+    {% if zero_result_searches %}
+    <span class="badge amber">{{ zero_result_searches | length }} open</span>
+    {% endif %}
+  </div>
+  <div class="panel-body flush">
+    {% if not zero_result_searches %}
+      <div class="empty" style="margin:16px">No zero-result searches — every query found at least one match.</div>
+    {% else %}
+    <table class="grid">
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>User</th>
+          <th>Query</th>
+          <th>Project</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in zero_result_searches %}
+        <tr>
+          <td class="muted">{{ s.created_at | since }}</td>
+          <td>
+            <div class="user-cell">
+              <div class="avatar" data-name="{{ s.user_name }}" style="width:22px;height:22px;font-size:9px">
+                {{ s.user_name[0].upper() }}
+              </div>
+              <a href="/dashboard/users/{{ s.user_name }}">{{ s.user_name }}</a>
+            </div>
+          </td>
+          <td><code>{{ s.query }}</code></td>
+          <td class="muted">{{ s.project_filter or "—" }}</td>
+          <td style="text-align:right">
+            <a href="/dashboard/setup#rules" class="btn">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              Write doc
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Recent searches -->
+<div class="panel">
+  <div class="panel-header">
+    <h2 class="panel-title">Recent searches</h2>
+  </div>
+  <div class="panel-body flush">
+    {% if not recent_searches %}
+      <div class="empty" style="margin:16px">No search calls recorded yet.</div>
+    {% else %}
+    <table class="grid">
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>User</th>
+          <th>Query</th>
+          <th>Top result</th>
+          <th class="num">Score</th>
+          <th>Project</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in recent_searches %}
+        <tr>
+          <td class="muted">{{ s.created_at | since }}</td>
+          <td>
+            <div class="user-cell">
+              <div class="avatar" data-name="{{ s.user_name }}" style="width:22px;height:22px;font-size:9px">
+                {{ s.user_name[0].upper() }}
+              </div>
+              <a href="/dashboard/users/{{ s.user_name }}">{{ s.user_name }}</a>
+            </div>
+          </td>
+          <td><code>{{ s.query }}</code></td>
+          <td>
+            {% if s.top_result_path %}
+              <code>{{ s.top_result_path }}</code>
+            {% else %}
+              <span class="muted">no results</span>
+            {% endif %}
+          </td>
+          <td class="num">{{ "%.2f" | format(s.top_result_score) if s.top_result_score is not none else "—" }}</td>
+          <td class="muted">{{ s.project_filter or "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
