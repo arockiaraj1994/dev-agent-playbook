@@ -39,18 +39,24 @@ DEFINITIONS: list[Tool] = [
                 "doc_type": {
                     "type": "string",
                     "description": (
-                        "Optional filter. One of: agents, architecture, "
-                        "error-conventions, anti-patterns, glossary, "
-                        "pattern, skill."
+                        "Optional filter. One of: agents, index, guardrails, "
+                        "definition-of-done, glossary, architecture, "
+                        "architecture-decision, language-rules, pattern, "
+                        "skill, workflow, gate."
                     ),
                     "enum": [
                         "agents",
-                        "architecture",
-                        "error-conventions",
-                        "anti-patterns",
+                        "index",
+                        "guardrails",
+                        "definition-of-done",
                         "glossary",
+                        "architecture",
+                        "architecture-decision",
+                        "language-rules",
                         "pattern",
                         "skill",
+                        "workflow",
+                        "gate",
                     ],
                 },
             },

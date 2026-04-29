@@ -4,10 +4,16 @@ server.py — Dev Agent Playbook MCP Server (SSE only; read-only rules + usage m
 Tools:
   - list_projects
   - list_rule_docs
+  - start_task           — one-call orientation (guardrails + workflow + next_calls)
   - get_agents_md
-  - get_rules
+  - get_guardrails       — always-on rules
+  - get_index            — auto-generated trigger map
+  - get_architecture     — overview + ADRs
+  - get_language_rules   — per-language standards / testing / anti-patterns
   - get_pattern
   - get_skill
+  - get_workflow         — task-driven flows
+  - get_gate             — gate README + script listing
   - search_rules
 
 Run:
@@ -80,6 +86,7 @@ from session import DashboardSession
 from tools import docs as _docs_mod
 from tools import projects as _projects_mod
 from tools import search_tool as _search_mod
+from tools import start_task as _start_task_mod
 from loader import RulesStore, bootstrap, resolve_rules_root
 
 # ---------------------------------------------------------------------------
@@ -140,7 +147,7 @@ metrics_store: MetricsStore | None = None
 
 server = Server(SERVER_LABEL)
 
-_TOOL_MODULES = [_projects_mod, _docs_mod, _search_mod]
+_TOOL_MODULES = [_projects_mod, _start_task_mod, _docs_mod, _search_mod]
 
 
 @server.list_tools()
@@ -639,6 +646,8 @@ def build_app(deps: AppDeps) -> Starlette:
                 deps.auth_store,
                 dashboard_session,
                 auth_enabled=deps.cfg.auth_enabled,
+                rules_store=store,
+                rules_root=resolve_rules_root(),
             ),
         ),
         Route("/", endpoint=_root_redirect, methods=["GET"]),

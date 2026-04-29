@@ -2,20 +2,31 @@
 """
 validate-rules.py — Pre-commit / CI gate for rule docs.
 
-Checks:
-  1. Each project directory contains agents.md (required).
-  2. Optional YAML frontmatter parses cleanly (uses mcp.loader).
-  3. Doc type inferred from path is not 'other' (warns; doesn't fail).
-  4. Relative markdown links resolve to existing files.
+Responsibilities:
+  1. Validate the per-project layout under <repo>/<project>/:
+       - AGENTS.md present
+       - core/{guardrails,definition-of-done,glossary}.md present
+       - architecture/overview.md present
+       - At least one languages/<lang>/standards.md
+       - All workflows present (new-feature, bug-fix, security-fix, refactor)
+       - gates/README.md present, gates/scripts/*.sh executable
+  2. Optional YAML frontmatter parses cleanly.
+  3. Doc type inferred from path is never `other`.
+  4. Relative markdown links resolve.
+  5. Auto-generate (or check) <project>/INDEX.md from frontmatter.
 
-Exits non-zero on errors; warnings do not fail the run.
+Modes:
+    python scripts/validate-rules.py             # validate
+    python scripts/validate-rules.py --regen-index   # rewrite INDEX.md
+    python scripts/validate-rules.py --check     # validate + check INDEX.md is up to date
 
-Usage:
-    python scripts/validate-rules.py
+Exits non-zero on any error.
 """
 
 from __future__ import annotations
 
+import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -25,36 +36,81 @@ MCP_DIR = REPO_ROOT / "mcp"
 
 # Reuse the loader so this script always agrees with what the server sees.
 sys.path.insert(0, str(MCP_DIR))
-from loader import _parse_docs, _parse_frontmatter  # noqa: E402
+from loader import (  # noqa: E402
+    RuleDoc,
+    _parse_docs,
+    _parse_frontmatter,
+)
+from index_render import render_index  # noqa: E402
 
 EXCLUDED_DIRS = {"mcp", ".git", ".github", "scripts", ".venv"}
 
-# Markdown link: [text](target)
 LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+
+REQUIRED_FILES = (
+    "AGENTS.md",
+    "core/guardrails.md",
+    "core/definition-of-done.md",
+    "core/glossary.md",
+    "architecture/overview.md",
+    "gates/README.md",
+)
+REQUIRED_WORKFLOWS = ("new-feature", "bug-fix", "security-fix", "refactor")
+
+
+# ---------------------------------------------------------------------------
+# Project discovery
+# ---------------------------------------------------------------------------
 
 
 def _project_dirs(repo_root: Path) -> list[Path]:
     return [
-        p for p in sorted(repo_root.iterdir())
+        p
+        for p in sorted(repo_root.iterdir())
         if p.is_dir() and not p.name.startswith(".") and p.name not in EXCLUDED_DIRS
     ]
 
 
-def _check_required_agents_md(projects: list[Path]) -> list[str]:
+# ---------------------------------------------------------------------------
+# Structure checks
+# ---------------------------------------------------------------------------
+
+
+def _check_required_files(projects: list[Path]) -> list[str]:
     errors: list[str] = []
     for project in projects:
-        agents = project / "agents.md"
-        if not agents.is_file():
-            errors.append(f"missing required file: {project.name}/agents.md")
+        for rel in REQUIRED_FILES:
+            if not (project / rel).is_file():
+                errors.append(f"{project.name}: missing required file {rel}")
+        # At least one language standards doc.
+        langs_dir = project / "languages"
+        has_standards = False
+        if langs_dir.is_dir():
+            for lang_dir in langs_dir.iterdir():
+                if (lang_dir / "standards.md").is_file():
+                    has_standards = True
+                    break
+        if not has_standards:
+            errors.append(
+                f"{project.name}: expected at least one languages/<lang>/standards.md"
+            )
+        # All four workflows.
+        for wf in REQUIRED_WORKFLOWS:
+            if not (project / "workflows" / f"{wf}.md").is_file():
+                errors.append(f"{project.name}: missing workflows/{wf}.md")
+        # Gate scripts executable.
+        scripts_dir = project / "gates" / "scripts"
+        if scripts_dir.is_dir():
+            for s in scripts_dir.iterdir():
+                if s.is_file() and s.suffix == ".sh" and not os.access(s, os.X_OK):
+                    errors.append(
+                        f"{project.name}: gates/scripts/{s.name} is not executable "
+                        "(chmod +x)"
+                    )
     return errors
 
 
 def _check_frontmatter(repo_root: Path) -> list[str]:
-    """
-    Parse every rule doc the loader would index. _parse_docs reads each file
-    and runs _parse_frontmatter; if there's a hard parse error, it would have
-    already raised — we re-run frontmatter parsing here with stricter checks.
-    """
     errors: list[str] = []
     for md in repo_root.rglob("*.md"):
         rel = md.relative_to(repo_root)
@@ -69,15 +125,12 @@ def _check_frontmatter(repo_root: Path) -> list[str]:
             continue
         if content.startswith("---"):
             metadata, _ = _parse_frontmatter(content)
-            # Re-find the boundary; if missing, _parse_frontmatter returns ({}, content)
-            # but we want to flag the malformed case explicitly.
             if not metadata and "---" not in content[3:]:
                 errors.append(f"{rel}: starts with '---' but no closing '---' boundary")
     return errors
 
 
 def _check_links(repo_root: Path) -> list[str]:
-    """Validate relative markdown links. External (http(s)://) and anchors are skipped."""
     errors: list[str] = []
     for md in repo_root.rglob("*.md"):
         rel = md.relative_to(repo_root)
@@ -93,7 +146,6 @@ def _check_links(repo_root: Path) -> list[str]:
                 or target.startswith("<")
             ):
                 continue
-            # strip anchor / query
             path_part = target.split("#", 1)[0].split("?", 1)[0]
             if not path_part:
                 continue
@@ -103,21 +155,93 @@ def _check_links(repo_root: Path) -> list[str]:
     return errors
 
 
-def main() -> int:
+def _check_no_other_doc_types(docs: list[RuleDoc]) -> list[str]:
+    return [
+        f"{d.project}/{d.relative_path}: does not match the expected layout"
+        for d in docs
+        if d.doc_type == "other"
+    ]
+
+
+# ---------------------------------------------------------------------------
+# INDEX.md generator (delegates to mcp/index_render.py)
+# ---------------------------------------------------------------------------
+
+
+def _regen_index(
+    projects: list[Path], all_docs: list[RuleDoc], *, check_only: bool = False
+) -> list[str]:
+    """Write INDEX.md (or, in check mode, return diff errors)."""
+    errors: list[str] = []
+    by_project: dict[str, list[RuleDoc]] = {}
+    for d in all_docs:
+        if d.doc_type == "other":
+            continue
+        if d.relative_path == "INDEX.md":
+            continue
+        by_project.setdefault(d.project, []).append(d)
+
+    for p in projects:
+        target = p / "INDEX.md"
+        rendered = render_index(p.name, by_project.get(p.name, []))
+        if check_only:
+            existing = target.read_text(encoding="utf-8") if target.is_file() else ""
+            if existing != rendered:
+                errors.append(
+                    f"{p.name}/INDEX.md is out of date — run "
+                    "`python scripts/validate-rules.py --regen-index`."
+                )
+        else:
+            target.write_text(rendered, encoding="utf-8")
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--regen-index",
+        action="store_true",
+        help="Regenerate <project>/INDEX.md files (writes to disk).",
+    )
+    group.add_argument(
+        "--check",
+        action="store_true",
+        help="Validate AND fail if any INDEX.md is out of date.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv if argv is not None else sys.argv[1:])
+
     print(f"Validating rules under {REPO_ROOT}")
     projects = _project_dirs(REPO_ROOT)
     if not projects:
         print("ERROR: no project directories found.", file=sys.stderr)
         return 1
 
-    errors: list[str] = []
-    errors += _check_required_agents_md(projects)
-    errors += _check_frontmatter(REPO_ROOT)
-    errors += _check_links(REPO_ROOT)
-
-    # Use _parse_docs for an end-to-end sanity check (also surfaces 'other' warnings).
     docs = _parse_docs(REPO_ROOT)
     print(f"  Loaded {len(docs)} rule docs across {len(projects)} project(s).")
+
+    if args.regen_index:
+        _regen_index(projects, docs, check_only=False)
+        print(f"  Regenerated INDEX.md for {len(projects)} project(s).")
+        return 0
+
+    errors: list[str] = []
+    errors += _check_required_files(projects)
+    errors += _check_frontmatter(REPO_ROOT)
+    errors += _check_links(REPO_ROOT)
+    errors += _check_no_other_doc_types(docs)
+
+    if args.check:
+        errors += _regen_index(projects, docs, check_only=True)
 
     if errors:
         print(f"\nFAILED: {len(errors)} error(s):", file=sys.stderr)

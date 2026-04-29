@@ -1,8 +1,24 @@
 """
 loader.py — Loads all markdown rule docs from disk into memory.
 
-Optionally parses YAML frontmatter (a small dependency-free subset: scalar
-strings, inline list of strings) when present at the top of a doc.
+Path-first dispatch: doc_type is inferred from the doc's path inside the
+project directory, not its filename alone. The supported layout per project:
+
+    <project>/
+      AGENTS.md
+      INDEX.md
+      README.md                     (skipped — human-only)
+      core/{guardrails,definition-of-done,glossary}.md
+      architecture/overview.md
+      architecture/decisions/<n>.md
+      languages/<lang>/{standards,testing,anti-patterns}.md
+      patterns/<n>.md
+      skills/<n>.md
+      workflows/<n>.md
+      gates/README.md               (+ gates/scripts/*.sh — listed in metadata only)
+
+Optional YAML frontmatter is parsed (small dependency-free subset: scalar
+strings, inline list of strings).
 """
 
 import logging
@@ -19,16 +35,34 @@ logger = logging.getLogger(__name__)
 _MCP_DIR = Path(__file__).resolve().parent
 _DEFAULT_RULES_ROOT = _MCP_DIR.parent
 
-# Files / dirs that are excluded from the in-memory store.
-# Top-level meta files (README.md, CONTRIBUTING.md, TEMPLATE.md, CHANGELOG.md)
-# are not project rules — exclude them by name.
-_EXCLUDED_PREFIXES = ("mcp/", ".git/", ".github/", "scripts/")
+# Top-level dirs/files inside the rules repo that are not project rules.
+_EXCLUDED_PREFIXES = ("mcp/", ".git/", ".github/", "scripts/", ".venv/")
 _EXCLUDED_TOP_LEVEL_FILES = {
     "README.md",
     "CONTRIBUTING.md",
     "TEMPLATE.md",
     "CHANGELOG.md",
 }
+
+# Files inside a project that are intentionally not indexed (human-only).
+_EXCLUDED_PROJECT_FILES = {"README.md"}
+
+
+# All recognized doc types. Used by tools and validators.
+KNOWN_DOC_TYPES = (
+    "agents",
+    "index",
+    "guardrails",
+    "definition-of-done",
+    "glossary",
+    "architecture",
+    "architecture-decision",
+    "language-rules",
+    "pattern",
+    "skill",
+    "workflow",
+    "gate",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -38,12 +72,12 @@ _EXCLUDED_TOP_LEVEL_FILES = {
 
 @dataclass
 class RuleDoc:
-    project: str  # e.g. "integration-manager"
-    relative_path: str  # e.g. "patterns/keycloak-oidc.md"
-    doc_type: str  # agents | architecture | error-conventions | anti-patterns | glossary | pattern | skill | other
-    name: str  # e.g. "keycloak-oidc"
-    content: str  # body without frontmatter
-    metadata: dict = field(default_factory=dict)  # parsed frontmatter (may be empty)
+    project: str
+    relative_path: str
+    doc_type: str
+    name: str
+    content: str
+    metadata: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -73,8 +107,6 @@ class RulesStore:
 # Frontmatter (small, dependency-free subset)
 # ---------------------------------------------------------------------------
 
-_FRONTMATTER_BOUNDARY = re.compile(r"^---\s*$", re.MULTILINE)
-
 
 def _strip_quotes(value: str) -> str:
     value = value.strip()
@@ -85,11 +117,10 @@ def _strip_quotes(value: str) -> str:
 
 def _parse_inline_list(raw: str) -> list[str]:
     """Parse `[a, b, "c d"]` into ["a", "b", "c d"]. Bare strings allowed."""
-    inner = raw.strip()[1:-1]  # drop [ ]
+    inner = raw.strip()[1:-1]
     if not inner.strip():
         return []
     items: list[str] = []
-    # naive split on commas not inside quotes
     buf: list[str] = []
     in_quote: str | None = None
     for ch in inner:
@@ -120,7 +151,6 @@ def _parse_frontmatter(content: str) -> tuple[dict, str]:
     if not content.startswith("---"):
         return {}, content
 
-    # Locate the closing `---` boundary on its own line.
     after_open = content[3:]
     m = re.search(r"^---\s*$", after_open, re.MULTILINE)
     if not m:
@@ -128,7 +158,6 @@ def _parse_frontmatter(content: str) -> tuple[dict, str]:
 
     raw_block = after_open[: m.start()]
     body_start = 3 + m.end()
-    # consume trailing newline after the closing boundary
     if body_start < len(content) and content[body_start] == "\n":
         body_start += 1
     body = content[body_start:]
@@ -156,30 +185,83 @@ def _parse_frontmatter(content: str) -> tuple[dict, str]:
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers
+# Path-first doc-type inference
 # ---------------------------------------------------------------------------
 
 
-def _infer_doc_type(relative_path: str) -> str:
-    """Infer document type from path."""
-    parts = Path(relative_path).parts
-    name = Path(relative_path).stem
+def _infer_doc_type_and_name(relative_path: str) -> tuple[str, str]:
+    """
+    Infer (doc_type, name) from a path inside a project directory.
 
-    if name == "agents":
-        return "agents"
-    if name == "architecture":
-        return "architecture"
-    if name == "error-conventions":
-        return "error-conventions"
-    if name == "anti-patterns":
-        return "anti-patterns"
-    if name == "glossary":
-        return "glossary"
-    if "patterns" in parts:
-        return "pattern"
-    if "skills" in parts:
-        return "skill"
-    return "other"
+    `name` is the canonical identifier callers pass to fetch tools (without
+    `.md`). For language-rules it is `<lang>/<doc>` (e.g. `java/standards`).
+
+    Returns ("other", <stem>) for paths that don't fit the layout — these
+    will be flagged as errors by the validator.
+    """
+    parts = Path(relative_path).parts
+    stem = Path(relative_path).stem
+
+    # Top-of-project files
+    if relative_path == "AGENTS.md":
+        return "agents", "agents"
+    if relative_path == "INDEX.md":
+        return "index", "index"
+
+    if len(parts) < 2:
+        return "other", stem
+
+    head = parts[0]
+
+    if head == "core":
+        if relative_path == "core/guardrails.md":
+            return "guardrails", "guardrails"
+        if relative_path == "core/definition-of-done.md":
+            return "definition-of-done", "definition-of-done"
+        if relative_path == "core/glossary.md":
+            return "glossary", "glossary"
+        return "other", stem
+
+    if head == "architecture":
+        if relative_path == "architecture/overview.md":
+            return "architecture", "overview"
+        if len(parts) >= 3 and parts[1] == "decisions":
+            return "architecture-decision", stem
+        return "other", stem
+
+    if head == "languages":
+        # languages/<lang>/<doc>.md
+        if len(parts) == 3:
+            lang = parts[1]
+            doc = stem
+            return "language-rules", f"{lang}/{doc}"
+        return "other", stem
+
+    if head == "patterns":
+        return "pattern", stem
+
+    if head == "skills":
+        return "skill", stem
+
+    if head == "workflows":
+        return "workflow", stem
+
+    if head == "gates":
+        if relative_path == "gates/README.md":
+            return "gate", "gate"
+        return "other", stem
+
+    return "other", stem
+
+
+# Public alias retained for tests / callers that only need the type.
+def _infer_doc_type(relative_path: str) -> str:
+    return _infer_doc_type_and_name(relative_path)[0]
+
+
+# ---------------------------------------------------------------------------
+# Exclusions
+# ---------------------------------------------------------------------------
 
 
 def _is_excluded(relative_path: str) -> bool:
@@ -188,7 +270,23 @@ def _is_excluded(relative_path: str) -> bool:
             return True
     if relative_path in _EXCLUDED_TOP_LEVEL_FILES:
         return True
+    # Per-project README.md (e.g. apache-camel/README.md) is human-only.
+    parts = Path(relative_path).parts
+    if len(parts) == 2 and parts[1] in _EXCLUDED_PROJECT_FILES:
+        return True
     return False
+
+
+# ---------------------------------------------------------------------------
+# Walk + parse
+# ---------------------------------------------------------------------------
+
+
+def _list_gate_scripts(project_root: Path) -> list[str]:
+    scripts_dir = project_root / "gates" / "scripts"
+    if not scripts_dir.is_dir():
+        return []
+    return sorted(p.name for p in scripts_dir.iterdir() if p.is_file())
 
 
 def _parse_docs(repo_root: Path) -> list[RuleDoc]:
@@ -204,8 +302,6 @@ def _parse_docs(repo_root: Path) -> list[RuleDoc]:
 
         parts = relative.parts
         if len(parts) < 2:
-            # Top-level .md not in our excluded set — surface it so authors
-            # know it isn't being indexed.
             logger.warning(
                 "Skipping top-level markdown file %s (not under a project directory)",
                 relative_str,
@@ -214,8 +310,7 @@ def _parse_docs(repo_root: Path) -> list[RuleDoc]:
 
         project = parts[0]
         doc_relative = "/".join(parts[1:])
-        doc_type = _infer_doc_type(doc_relative)
-        name = relative.stem
+        doc_type, name = _infer_doc_type_and_name(doc_relative)
 
         try:
             raw_content = md_file.read_text(encoding="utf-8")
@@ -225,11 +320,24 @@ def _parse_docs(repo_root: Path) -> list[RuleDoc]:
 
         metadata, body = _parse_frontmatter(raw_content)
 
+        # Inject derived metadata
+        if doc_type == "language-rules":
+            # languages/<lang>/<doc>.md — store the language code.
+            metadata.setdefault("language", parts[1] if parts[0] == "languages" else "")
+            # parts here are project-relative; the language is parts[1] (after 'languages/').
+            lang_parts = Path(doc_relative).parts
+            if len(lang_parts) >= 2 and lang_parts[0] == "languages":
+                metadata["language"] = lang_parts[1]
+
+        if doc_type == "gate":
+            scripts = _list_gate_scripts(repo_root / project)
+            if scripts:
+                metadata["gate_scripts"] = scripts
+
         if doc_type == "other":
             logger.warning(
-                "Doc %s/%s does not match a known type (agents/architecture/"
-                "error-conventions/anti-patterns/glossary/patterns/skills); "
-                "indexing as 'other'.",
+                "Doc %s/%s does not match the expected layout; "
+                "indexing as 'other' (validator will flag this).",
                 project,
                 doc_relative,
             )
@@ -255,10 +363,7 @@ def _parse_docs(repo_root: Path) -> list[RuleDoc]:
 
 
 def resolve_rules_root() -> Path:
-    """
-    Parent of the mcp/ directory: repository root with project folders
-    (e.g. integration-manager/).
-    """
+    """Parent of the mcp/ directory."""
     root = _DEFAULT_RULES_ROOT
     if not root.is_dir():
         raise FileNotFoundError(

@@ -1,4 +1,10 @@
-# Error Conventions — Apache Camel
+---
+title: Error handling pattern — Apache Camel
+description: DLQ, onException, retry policy, and HTTP/SFTP error mapping for routes.
+tags: [error-handling, dlq, retries]
+---
+
+# Error handling — Apache Camel
 
 ---
 

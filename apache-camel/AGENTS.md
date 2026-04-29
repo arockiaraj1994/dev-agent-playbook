@@ -1,3 +1,9 @@
+---
+title: AGENTS.md — Apache Camel
+description: Identity and behavior for AI agents working on Apache Camel integration projects (YAML DSL + Quarkus or Spring Boot + Java 21).
+tags: [camel, java, integration, yaml-dsl]
+---
+
 # AGENTS.md — Apache Camel
 
 **Stack:** Apache Camel (YAML DSL) + Quarkus or Spring Boot + Java 21
@@ -20,14 +26,20 @@ You fix root causes, not symptoms.
 
 | Doc | Purpose |
 |-----|---------|
-| `./architecture.md` | System overview, component boundaries, messaging topology |
-| `./error-conventions.md` | Error handling rules — per-route, DLQ, retries |
-| `./anti-patterns.md` | What NOT to do — read before writing anything |
-| `./glossary.md` | Domain terms and Camel concepts |
-| `./patterns/` | Canonical route patterns (SFTP, REST, messaging, transformations) |
-| `./skills/` | Step-by-step task workflows |
+| `./INDEX.md` | Auto-generated trigger map — task phrase → which doc to load |
+| `./core/guardrails.md` | Always-on MUST / MUST NOT rules |
+| `./core/definition-of-done.md` | Tests + lint + security gates |
+| `./core/glossary.md` | Domain terms and Camel concepts |
+| `./architecture/overview.md` | System overview, component boundaries, messaging topology |
+| `./architecture/decisions/` | Architectural Decision Records (ADRs) |
+| `./languages/java/` | Java standards, testing, anti-patterns |
+| `./patterns/` | Canonical route patterns (SFTP, REST, messaging, error-handling) |
+| `./skills/` | Verb-noun playbooks (add-route, debug-route) |
+| `./workflows/` | Task-driven flows (new-feature, bug-fix, security-fix, refactor) |
+| `./gates/` | Definition-of-done gates and `verify-*.sh` scripts |
 
-**Read `./anti-patterns.md` before writing any code.**
+**Call `start_task` first.** It returns guardrails + the matched workflow + next-call hints.
+For ad-hoc work, read `./core/guardrails.md` and `./languages/java/anti-patterns.md` before writing code.
 
 ---
 

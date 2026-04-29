@@ -1,7 +1,10 @@
 ---
-title: Debug a Failing Camel Route
+title: Skill — Debug a failing Camel route
+description: Reproduce, isolate, and fix defects in an existing Camel route — DLQ checks, redelivery policy, error handler config.
 type: skill
 tags: [camel, debug, troubleshooting]
+triggers: [debug a route, route is failing, messages are dropped, dlq filling up, fix camel bug]
+see_also: [pattern:error-handling, pattern:sftp-route, language:java/testing]
 ---
 
 # Skill: Debug a Failing Camel Route

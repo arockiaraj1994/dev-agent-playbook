@@ -1,7 +1,10 @@
 ---
-title: Add a New Camel Route
+title: Skill — Add a new Camel route
+description: Step-by-step playbook for authoring a new YAML-DSL Camel route with DLQ wiring and tests.
 type: skill
 tags: [camel, route, yaml-dsl]
+triggers: [add a route, new route, create a camel route, new connector]
+see_also: [pattern:sftp-route, pattern:rest-producer, pattern:messaging-route, pattern:error-handling]
 ---
 
 # Skill: Add a New Camel Route

@@ -1,3 +1,9 @@
+---
+title: Architecture — Apache Camel
+description: System overview, module map, messaging topology, and key design decisions for Apache Camel projects.
+tags: [architecture, camel, overview]
+---
+
 # Architecture — Apache Camel
 
 This document describes the standard architecture for Apache Camel integration projects in this playbook.

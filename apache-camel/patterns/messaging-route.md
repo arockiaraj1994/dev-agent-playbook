@@ -1,7 +1,9 @@
 ---
-title: Messaging Route (JMS / Kafka)
+title: Messaging route pattern — Apache Camel
+description: Canonical pattern for consuming and producing messages via JMS (ActiveMQ, IBM MQ) or Kafka with DLQ wiring.
 type: pattern
 tags: [camel, jms, kafka, messaging, integration]
+see_also: [pattern:error-handling, skill:add-route]
 ---
 
 # Pattern: Messaging Route

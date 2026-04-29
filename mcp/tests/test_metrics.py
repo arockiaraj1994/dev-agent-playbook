@@ -59,13 +59,22 @@ def test_summarize_args_handles_non_string_values() -> None:
 @pytest.mark.parametrize(
     "tool,args,expected",
     [
-        ("get_agents_md", {"project": "p"}, "p/agents.md"),
+        ("get_agents_md", {"project": "p"}, "p/AGENTS.md"),
+        ("get_index", {"project": "p"}, "p/INDEX.md"),
+        ("get_guardrails", {"project": "p"}, "p/core/guardrails.md+definition-of-done.md"),
+        ("get_architecture", {"project": "p"}, "p/architecture/overview.md"),
+        ("get_architecture", {"project": "p", "name": "0007-foo"}, "p/architecture/decisions/0007-foo.md"),
+        ("get_language_rules", {"project": "p", "language": "java"}, "p/languages/java/standards.md"),
+        ("get_language_rules", {"project": "p", "language": "java", "doc": "testing"}, "p/languages/java/testing.md"),
         ("get_pattern", {"project": "p", "pattern": "react"}, "p/patterns/react.md"),
         ("get_skill", {"project": "p", "skill": "deploy"}, "p/skills/deploy.md"),
-        ("get_rules", {"project": "p", "context": "anti-patterns"}, "p/anti-patterns.md"),
+        ("get_workflow", {"project": "p", "name": "bug-fix"}, "p/workflows/bug-fix.md"),
+        ("get_gate", {"project": "p"}, "p/gates/README.md"),
+        ("get_gate", {"project": "p", "name": "verify-java"}, "p/gates/scripts/verify-java.sh"),
         ("get_pattern", {"project": "p"}, None),
         ("get_pattern", {"pattern": "react"}, None),
         ("search_rules", {"query": "x"}, None),
+        ("get_rules", {"project": "p", "context": "anti-patterns"}, None),
     ],
 )
 def test_args_to_doc_path(tool: str, args: dict, expected: str | None) -> None:

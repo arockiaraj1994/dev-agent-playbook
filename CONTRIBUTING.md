@@ -11,33 +11,45 @@ This guide covers both. For copy-pasteable doc skeletons, see [`TEMPLATE.md`](TE
 
 ## Adding a new project ruleset
 
-Create a directory next to `mcp/`. The minimum is one file:
+Create a directory next to `mcp/`. The validator enforces the full layout —
+copy from `apache-camel/` for a known-good baseline.
 
 ```
 my-project/
-  agents.md         # required — identity + behavior for this codebase
+  README.md                          # humans
+  AGENTS.md                          # required — identity + behavior
+  INDEX.md                           # auto-generated trigger map (do not hand-edit)
+  core/
+    guardrails.md                    # required — always-on MUST / MUST NOT
+    definition-of-done.md            # required — gates + functional + security
+    glossary.md                      # required — domain terms
+  architecture/
+    overview.md                      # required — system overview
+    decisions/                       # ADRs (one .md per decision)
+  languages/<lang>/                  # at least one with standards.md
+    standards.md
+    testing.md
+    anti-patterns.md
+  patterns/<name>.md                 # canonical noun-named patterns
+  skills/<action>.md                 # verb-noun playbooks
+  workflows/                         # required — all four flows
+    new-feature.md
+    bug-fix.md
+    security-fix.md
+    refactor.md
+  gates/
+    README.md                        # required — what each gate enforces
+    scripts/verify-<lang>.sh         # executable
 ```
 
-Optional but recommended (the loader recognizes them by filename):
-
-```
-my-project/
-  agents.md
-  architecture.md           # module map, tech stack, service boundaries
-  error-conventions.md      # HTTP codes, error formats, logging
-  anti-patterns.md          # what NOT to do
-  glossary.md               # domain terms
-  patterns/
-    <name>.md               # canonical code patterns
-  skills/
-    <action>.md             # step-by-step task workflows
-```
-
-After adding the directory, **restart any running MCP server** so it picks up the new project. Verify with:
+After adding the directory:
 
 ```bash
-python scripts/validate-rules.py
+python scripts/validate-rules.py --regen-index   # write INDEX.md
+python scripts/validate-rules.py --check         # full validation + INDEX freshness
 ```
+
+Then restart any running MCP server.
 
 ---
 
@@ -66,10 +78,16 @@ The first line of every doc is its title. The MCP server uses the H1 as the doc'
 
 | Doc type | H1 format |
 |----------|-----------|
-| `agents.md` | `# AGENTS.md — <Project> (<short stack>)` |
-| `architecture.md` | `# Architecture — <Project>` |
+| `AGENTS.md` | `# AGENTS.md — <Project> (<short stack>)` |
+| `core/guardrails.md` | `# Guardrails — <Project>` |
+| `core/definition-of-done.md` | `# Definition of Done — <Project>` |
+| `architecture/overview.md` | `# Architecture — <Project>` |
+| `architecture/decisions/<n>.md` | `# ADR <n> — <decision>` |
+| `languages/<lang>/<doc>.md` | `# <Language> <doc> — <Project>` |
 | `patterns/<name>.md` | `# Pattern: <Name> — <project context>` |
 | `skills/<action>.md` | `# Skill: <Action> — <when to use>` |
+| `workflows/<name>.md` | `# Workflow — <Name>` |
+| `gates/README.md` | `# Gates — <Project>` |
 
 ---
 
@@ -94,19 +112,24 @@ Recognized fields:
 | Field | Type | Used for |
 |-------|------|----------|
 | `title` | string | Display name; weighted 2× in BM25 search. |
-| `description` | string | Short summary returned by `list_rule_docs`. |
+| `description` | string | Short summary returned by `list_rule_docs` and rendered into `INDEX.md`. |
 | `tags` | list of strings | Weighted 2× in BM25 search. |
 | `applies_to` | list of strings | Project scopes; informational for now. |
+| `triggers` | list of strings | Natural-language task triggers used by `start_task` and the `INDEX.md` generator. Workflows and skills should set this. |
+| `see_also` | list of strings | `<kind>:<name>` entries (e.g. `pattern:error-handling`, `skill:debug-route`, `language:java/standards`) — rendered as `## Next Calls` on tool fetches. |
+| `language` | string | Set automatically for `languages/<lang>/*.md`; can be set explicitly for other docs that target one language. |
+| `gates` | list of strings | On workflows: which `verify-*.sh` gate(s) close out the task. |
 
-Unknown keys are ignored. No frontmatter at all is fine.
+Unknown keys are ignored. No frontmatter at all is fine, but workflows and
+skills without `triggers` won't be discoverable through `start_task`.
 
 ---
 
 ## Cross-referencing
 
-- Link to **`./glossary.md`** the first time a domain term appears in a doc.
-- When a pattern explicitly avoids an anti-pattern, link to it: `(see ./anti-patterns.md §SECURITY)`.
-- Patterns and skills can reference each other: skills usually point at the patterns they implement.
+- Link to **`./core/glossary.md`** the first time a domain term appears in a doc.
+- When a pattern explicitly avoids an anti-pattern, link to the relevant `languages/<lang>/anti-patterns.md`.
+- Use `see_also:` frontmatter to wire up the `## Next Calls` chain — this is how AI agents move from a workflow to its skills and patterns without having to guess paths.
 
 ---
 
@@ -114,7 +137,7 @@ Unknown keys are ignored. No frontmatter at all is fine.
 
 - **Title:** `rules(<project>): short imperative description` for rule changes; `mcp: …` for server changes.
 - **Scope:** one project per PR when possible. Don't bundle a server refactor with a rule rewrite.
-- **CI must pass:** ruff lint, the rule validator (`scripts/validate-rules.py`), and unit tests.
+- **CI must pass:** ruff lint, the rule validator (`scripts/validate-rules.py --check`, which also enforces `INDEX.md` freshness), and unit tests.
 
 ---
 

@@ -1,7 +1,9 @@
 ---
-title: SFTP Inbound/Outbound Route
+title: SFTP route pattern — Apache Camel
+description: Canonical pattern for polling files from SFTP and delivering processed output back, with DLQ, retries, and credential hygiene.
 type: pattern
 tags: [camel, sftp, file, integration]
+see_also: [pattern:error-handling, skill:add-route, skill:debug-route]
 ---
 
 # Pattern: SFTP Route

@@ -869,16 +869,35 @@ def args_to_doc_path(tool_name: str, arguments: dict) -> str | None:
     if not project:
         return None
     if tool_name == "get_agents_md":
-        return f"{project}/agents.md"
+        return f"{project}/AGENTS.md"
+    if tool_name == "get_index":
+        return f"{project}/INDEX.md"
+    if tool_name == "get_guardrails":
+        return f"{project}/core/guardrails.md+definition-of-done.md"
+    if tool_name == "get_architecture":
+        adr = arguments.get("name")
+        if adr:
+            return f"{project}/architecture/decisions/{adr}.md"
+        return f"{project}/architecture/overview.md"
+    if tool_name == "get_language_rules":
+        lang = arguments.get("language")
+        doc = arguments.get("doc") or "standards"
+        return f"{project}/languages/{lang}/{doc}.md" if lang else None
     if tool_name == "get_pattern":
         name = arguments.get("pattern")
         return f"{project}/patterns/{name}.md" if name else None
     if tool_name == "get_skill":
         name = arguments.get("skill")
         return f"{project}/skills/{name}.md" if name else None
-    if tool_name == "get_rules":
-        ctx = arguments.get("context")
-        return f"{project}/{ctx}.md" if ctx else None
+    if tool_name == "get_workflow":
+        name = arguments.get("name")
+        return f"{project}/workflows/{name}.md" if name else None
+    if tool_name == "get_gate":
+        name = arguments.get("name")
+        if name:
+            script = name if name.endswith(".sh") else f"{name}.sh"
+            return f"{project}/gates/scripts/{script}"
+        return f"{project}/gates/README.md"
     return None
 
 

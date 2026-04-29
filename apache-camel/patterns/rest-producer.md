@@ -1,7 +1,9 @@
 ---
-title: REST Producer Route
+title: REST producer pattern — Apache Camel
+description: Canonical pattern for calling an external REST API from a Camel route with TLS, retries, and HTTP-status-aware error mapping.
 type: pattern
 tags: [camel, rest, http, integration]
+see_also: [pattern:error-handling, skill:add-route]
 ---
 
 # Pattern: REST Producer Route

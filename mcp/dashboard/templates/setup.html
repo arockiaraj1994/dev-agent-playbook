@@ -40,8 +40,6 @@
     <a href="#server"   class="active" data-toc="server">Your server URL</a>
     <a href="#editors"  data-toc="editors">Connect an editor</a>
     <a href="#verify"   data-toc="verify">Verify it works</a>
-    <div class="toc-section">Next steps</div>
-    <a href="#rules"    data-toc="rules">Add project rules</a>
   </nav>
 
   <!-- Content -->
@@ -202,64 +200,13 @@ claude mcp add-json {{ server_label }} --scope project '{"type":"sse","url":"{{ 
       <ol class="checklist">
         <li>Restart your editor after adding the MCP server.</li>
         <li>Ask your AI: <em>"list available projects"</em> — you should see the project names returned from this server.</li>
-        <li>Ask your AI: <em>"search rules for error handling"</em> — you should see relevant rule doc results inlined.</li>
+        <li>Ask your AI: <em>"start_task on apache-camel for fixing a bug in the SFTP route"</em> — you should see guardrails + the matched <code>bug-fix</code> workflow + a <strong>Next Calls</strong> list pointing at related skills and patterns.</li>
         <li>Watch the pill at the top of this page — it flips to <span class="badge green"><span class="badge-dot"></span>connected</span> within a few seconds of your first call.</li>
       </ol>
-    </section>
-
-    <!-- Add project rules -->
-    <section class="doc-section" id="rules">
-      <h2>Add project rules</h2>
-      <p class="lede">Rules, architecture docs, and skills are markdown files indexed for search. Anyone on your team can add them — here's how.</p>
-
       <div class="callout">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-        <div>Before writing a new doc, check what's already there: <a href="/dashboard/searches"><strong>Browse existing rules →</strong></a></div>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        <div>Once connected, head to the <a href="/dashboard/guide"><strong>Guide</strong></a> for the MCP tool surface and how to author project rules so agents pick them up.</div>
       </div>
-
-      <h3>1. Choose a namespace</h3>
-      <p>Drop your file under one of three folders in the rules repo:</p>
-      <ul>
-        <li><code>rules/</code> — coding standards, conventions, "do this not that" guidance</li>
-        <li><code>arch/</code> — architecture overviews, system designs, ADRs</li>
-        <li><code>skills/</code> — runbooks, checklists, multi-step procedures</li>
-      </ul>
-
-      <h3>2. Write the doc</h3>
-      <p>Add a frontmatter block with at minimum <code>title</code> and <code>tags</code>. Tags weight the search index heavily — use the words your team would actually type.</p>
-      <div class="code-wrap">
-        <pre class="code-block">---
-title: API error handling
-tags: [api, errors, http, status-codes]
-projects: [payments-svc, api-gateway]
----
-
-# API error handling
-
-When a request fails, return a JSON envelope:
-
-```json
-{ "error": { "code": "RATE_LIMITED", "message": "..." } }
-```
-
-...</pre>
-        <button class="code-copy" type="button">copy</button>
-      </div>
-
-      <h3>3. Open a PR</h3>
-      <p>Push the file, open a PR against <code>main</code>. The CI bot will:</p>
-      <ol>
-        <li>Lint frontmatter (title, tags required)</li>
-        <li>Re-index the SQLite FTS table</li>
-        <li>Hot-reload the server (no restart needed)</li>
-      </ol>
-      <div class="callout">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/></svg>
-        <div>Watch the <a href="/dashboard/searches"><strong>Searches → Zero-result</strong></a> tab — every entry there is a doc your team is asking for. Pick one, write it, and you'll see the badge clear in real time.</div>
-      </div>
-
-      <h3>4. Pin to specific projects (optional)</h3>
-      <p>Use the <code>projects:</code> frontmatter array to scope a doc. Calls from <code>list_projects → search_rules(project=…)</code> will return scoped results first.</p>
     </section>
 
   </div><!-- /content -->
@@ -310,7 +257,7 @@ When a request fails, return a JSON envelope:
 
 /* TOC scrollspy */
 (function () {
-  var ids = ['server', 'editors', 'verify', 'rules'];
+  var ids = ['server', 'editors', 'verify'];
   var links = document.querySelectorAll('#setup-toc a[data-toc]');
 
   function onScroll() {
@@ -324,8 +271,8 @@ When a request fails, return a JSON envelope:
     });
   }
 
-  var main = document.querySelector('.main');
-  if (main) main.addEventListener('scroll', onScroll);
+  var scroller = document.querySelector('.content');
+  if (scroller) scroller.addEventListener('scroll', onScroll);
   window.addEventListener('scroll', onScroll);
 })();
 

@@ -1,3 +1,9 @@
+---
+title: Glossary — Apache Camel
+description: Domain terms and Camel concepts used in routes, processors, and tests.
+tags: [glossary, camel, terminology]
+---
+
 # Glossary — Apache Camel
 
 Domain terms and Camel concepts. Use consistent terms in routes, logs, code, and comments.

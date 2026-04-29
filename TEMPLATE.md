@@ -1,21 +1,18 @@
 # Templates
 
-Copy-pasteable starting points for new rule docs. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for naming, the pattern-vs-skill rule, and the H1 convention.
+Copy-pasteable starting points for the doc types in the per-project layout.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for naming, the pattern-vs-skill rule,
+and the H1 convention.
 
-The YAML frontmatter block is **optional** — delete it if you don't want it.
+The YAML frontmatter block is optional except where noted (workflows and
+skills should set `triggers:` and `see_also:` so `start_task` and
+`INDEX.md` work).
 
 ---
 
-## `agents.md` — required for every project
+## `AGENTS.md`
 
 ```markdown
----
-title: <Project> agents guide
-description: Identity, behavior rules, and entry point for AI agents on <project>.
-tags: [<stack-keywords>]
-applies_to: [<project-name>]
----
-
 # AGENTS.md — <Project> (<short stack>)
 
 **Stack:** <one-line stack summary>
@@ -37,157 +34,227 @@ You fix root causes, not symptoms.
 
 | Doc | Purpose |
 |-----|---------|
-| `./architecture.md` | Module map, tech stack, service boundaries |
-| `./error-conventions.md` | Error handling standards |
-| `./anti-patterns.md` | What NOT to generate — read before writing anything |
-| `./glossary.md` | Domain terms |
+| `./INDEX.md` | Auto-generated trigger map |
+| `./core/guardrails.md` | Always-on MUST / MUST NOT rules |
+| `./core/definition-of-done.md` | Tests + lint + security gates |
+| `./core/glossary.md` | Domain terms |
+| `./architecture/overview.md` | System overview |
+| `./architecture/decisions/` | ADRs |
+| `./languages/<lang>/` | Per-language standards, testing, anti-patterns |
 | `./patterns/` | Canonical code patterns |
-| `./skills/` | Step-by-step task workflows |
+| `./skills/` | Verb-noun playbooks |
+| `./workflows/` | Task-driven flows |
+| `./gates/` | Verification scripts |
 
-**Read `./anti-patterns.md` before writing any code.**
-
----
-
-## SECTION 1 — AI BEHAVIOR CONSTRAINTS (HIGHEST PRIORITY)
-
-### 1.1 Scope Control
-- Change ONLY what is asked.
-- Don't bundle unrelated improvements.
-
-### 1.2 Context First
-- Read existing code BEFORE writing anything new.
-- Match existing naming, patterns, structure, formatting.
-
-### 1.3 Ask, Don't Guess
-- If requirements are ambiguous, ASK.
-- If multiple valid approaches exist, list them and ask.
-
-<!-- Add 1.4–1.6 as needed; see integration-manager/agents.md for a worked example. -->
-
----
-
-## SECTION 2 — CLEAN CODE PRINCIPLES
-
-<!-- Functions, files, naming, SOLID, DRY/YAGNI/KISS, comments. Tailor to the stack. -->
-
----
-
-## SECTION 3 — DEPENDENCY & CHANGE HYGIENE
-
-<!-- Adding deps, version pinning, git hygiene. -->
-
----
-
-## SECTION 4 — TESTING
-
-<!-- Required test coverage, test naming, what to mock. -->
-
----
-
-## SECTION 5 — SECURITY DEFAULTS
-
-- NEVER hardcode credentials, API keys, tokens.
-- Validate all user input server-side.
-- Don't log sensitive data.
-<!-- Add stack-specific items. -->
+**Call `start_task` first.** It returns guardrails + the matched workflow + next-call hints.
 ```
 
 ---
 
-## `patterns/<name>.md` — canonical code structure
+## `core/guardrails.md`
 
 ```markdown
 ---
-title: <Name> pattern for <project>
-description: <one-sentence summary of what this pattern shows>.
+title: Guardrails — <Project>
+description: Always-on MUST / MUST NOT rules.
+tags: [guardrails, security]
+---
+
+# Guardrails — <Project>
+
+## MUST
+- Scope: one task = one change.
+- Read before write.
+- Ask, don't guess.
+- <stack-specific MUSTs>
+
+## MUST NOT
+- No hardcoded secrets.
+- <stack-specific MUST NOTs>
+
+## Definition of Done check
+Run `bash gates/scripts/verify-<lang>.sh` before claiming done.
+```
+
+---
+
+## `core/definition-of-done.md`
+
+```markdown
+---
+title: Definition of Done — <Project>
+description: Tests + lint + security gates that must pass.
+---
+
+# Definition of Done — <Project>
+
+## Mechanical (run via `gates/scripts/verify-<lang>.sh`)
+- [ ] <build step>
+- [ ] <lint step>
+- [ ] <test step>
+- [ ] <security scan>
+
+## Functional
+- [ ] <feature-level checks>
+
+## Security
+- [ ] <secret hygiene, TLS, etc.>
+```
+
+---
+
+## `architecture/overview.md`
+
+```markdown
+# Architecture — <Project>
+
+## System overview
+<paragraph>
+
+## Modules
+| Layer | Responsibility |
+|---|---|
+| ... | ... |
+
+## Tech stack
+<table>
+
+## Decisions
+See `architecture/decisions/` for ADRs.
+```
+
+---
+
+## `languages/<lang>/standards.md`
+
+```markdown
+---
+title: <Language> standards — <Project>
+description: Coding standards for <lang> in <project>.
+language: <lang>
+---
+
+# <Language> standards — <Project>
+
+## Language baseline
+- ...
+
+## Naming
+- ...
+
+## Project structure
+- ...
+```
+
+---
+
+## `patterns/<name>.md`
+
+```markdown
+---
+title: <Name> pattern — <Project>
+description: <one-sentence summary>.
 tags: [<stack>, <feature>]
+see_also: [skill:<related-skill>]
 ---
 
 # Pattern: <Name> — <project context>
 
-**Use this when:** <one-line trigger — the situation that calls for this pattern>.
-
-**Avoids:** <link to anti-patterns this prevents>
-
----
+**Use this when:** <one-line trigger>.
 
 ## Structure
-
-<!-- Folder layout, file roles, key types. Use a tree or table. -->
-
----
+<!-- Folder layout, file roles, key types. -->
 
 ## Canonical example
-
 ```<lang>
-<minimal, runnable example showing the pattern>
+<minimal example>
 ```
-
----
 
 ## Key rules
-
 - <do/don't 1>
 - <do/don't 2>
-
----
-
-## See also
-
-- `./glossary.md` — <terms used here>
-- `./anti-patterns.md` — <related sections>
-- `../skills/<action>.md` — <skill that uses this pattern>
 ```
 
 ---
 
-## `skills/<action>.md` — step-by-step task workflow
+## `skills/<action>.md`
 
 ```markdown
 ---
-title: <Action> in <project>
-description: <one-sentence summary of the task this skill walks through>.
-tags: [<stack>, <task-type>]
+title: <Action> — <Project>
+description: <one-sentence summary>.
+triggers: [<phrase>, <phrase>]
+see_also: [pattern:<name>, language:<lang>/standards]
 ---
 
 # Skill: <Action> — <when to use>
 
-**Trigger:** <user request that should invoke this skill, e.g. "add a new SFTP connector">.
-
-**Prerequisites:**
-- <repo cloned, deps installed, etc.>
-- <patterns the user should be familiar with>
-
----
-
 ## Steps
-
-1. **<Step name>** — <what to do, files to touch>.
-   ```<lang>
-   <code or command>
-   ```
-
-2. **<Step name>** — <what to do>.
-
-3. **<Step name>** — <verification step>.
-
----
+1. **<Step>** — <what to do>.
+2. **<Step>** — <verification>.
 
 ## Constraints
-
-- <non-obvious constraint, e.g. "must run mvn clean before this">.
-- <ordering rule, e.g. "Step 2 must complete before Step 3 in the same JVM">.
-
----
-
-## Verification
-
-- <how to confirm the change works>.
-- <where to look in logs>.
-
----
-
-## See also
-
-- `../patterns/<name>.md` — <pattern this skill applies>.
+- <non-obvious constraint>.
 ```
+
+---
+
+## `workflows/<name>.md`
+
+```markdown
+---
+title: Workflow — <Name>
+description: <one-sentence summary>.
+triggers: [<phrase>, <phrase>]
+gates: [verify-<lang>]
+see_also: [skill:<x>, pattern:<y>, language:<lang>/standards]
+---
+
+# Workflow — <Name>
+
+## Steps
+1. ...
+2. ...
+
+## Done
+- All boxes in `core/definition-of-done.md` are checked.
+```
+
+---
+
+## `gates/README.md`
+
+```markdown
+---
+title: Gates — <Project>
+description: Executable verification scripts.
+---
+
+# Gates — <Project>
+
+## verify-<lang>.sh
+
+```
+bash gates/scripts/verify-<lang>.sh
+```
+
+What it runs: <list>.
+```
+
+---
+
+## `gates/scripts/verify-<lang>.sh`
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# 1. <build / typecheck>
+# 2. <lint / format>
+# 3. <tests>
+# 4. <security scan>
+
+echo "OK"
+```
+
+Mark executable: `chmod +x gates/scripts/verify-<lang>.sh`. The validator fails if it isn't.

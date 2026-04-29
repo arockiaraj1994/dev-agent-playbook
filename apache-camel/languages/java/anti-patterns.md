@@ -1,3 +1,10 @@
+---
+title: Java anti-patterns — Apache Camel
+description: Mistakes to avoid when writing Camel routes, processors, and service beans in Java.
+language: java
+tags: [java, camel, anti-patterns]
+---
+
 # Anti-Patterns — Apache Camel
 
 Read this BEFORE writing any code. Violating these causes silent failures, security holes, and unmaintainable routes.

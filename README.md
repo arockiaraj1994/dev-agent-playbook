@@ -36,13 +36,26 @@ You connect your editor once and then work normally. Instead of copy-pasting con
 git clone <this-repo>
 cd <repo>/mcp
 uv sync
+uv run dev.py            # regen INDEX.md → validate → start the server
+```
+
+`uv run dev.py` is the recommended dev-loop entry point. It regenerates
+each project's `INDEX.md`, runs the validator (`scripts/validate-rules.py
+--check`), and only starts the server if validation passes. Add
+`--no-serve` to use it as a pre-commit hook, `--no-regen` to mirror CI
+exactly, or `--no-check` to skip validation in a pinch.
+
+If you only want to start the server (skipping the regen + validate
+steps):
+
+```bash
 uv run server.py
 ```
 
 To bind on all interfaces (LAN / Docker):
 
 ```bash
-MCP_HOST=0.0.0.0 MCP_PORT=3000 uv run server.py
+MCP_HOST=0.0.0.0 MCP_PORT=3000 uv run dev.py
 ```
 
 **Requirements:** Python 3.12+ and [uv](https://docs.astral.sh/uv/getting-started/installation/).
@@ -59,58 +72,72 @@ A project is a directory next to `mcp/` that holds rule docs for one codebase or
 
 ```
 <your-project>/
-  agents.md               ← required
-  architecture.md         ← recommended
-  error-conventions.md    ← recommended
-  anti-patterns.md        ← recommended
-  glossary.md             ← recommended
+  README.md                          ← humans
+  AGENTS.md                          ← AI entry point (required)
+  INDEX.md                           ← auto-generated trigger map (do not hand-edit)
+  core/
+    guardrails.md                    ← always-on MUST / MUST NOT
+    definition-of-done.md            ← tests + lint + security gates
+    glossary.md                      ← domain terms
+  architecture/
+    overview.md                      ← system overview
+    decisions/                       ← ADRs, one .md per decision
+    diagrams/                        ← optional images
+  languages/
+    <lang>/                          ← java | typescript | python | kotlin | sql | shell-yaml
+      standards.md
+      testing.md
+      anti-patterns.md
   patterns/
-    <name>.md             ← one file per pattern
+    <name>.md                        ← canonical noun-named patterns
   skills/
-    <action>.md           ← one file per workflow
+    <action>.md                      ← verb-noun playbooks
+  workflows/
+    new-feature.md
+    bug-fix.md
+    security-fix.md
+    refactor.md
+  gates/
+    README.md                        ← what each gate enforces
+    scripts/
+      verify-<lang>.sh               ← executable verification (lint + tests + security)
 ```
 
-Use `TEMPLATE.md` for copy-pasteable starters for each file type.
+Use `TEMPLATE.md` for copy-pasteable starters and look at `apache-camel/`,
+`baton-sso-config/`, or `integration-manager/` for live examples.
 
-### Step 2 — Write `agents.md` first
+### Step 2 — Write `AGENTS.md` first
 
-This is the identity doc — the first thing the AI loads for your project. It should cover:
+This is the identity doc — what role the AI plays in this project. Keep it
+focused: every line should earn its place. Cross-cutting MUST/MUST NOT
+rules belong in `core/guardrails.md`, not here.
 
-- What this codebase is and what the agent's role is
-- Behavior rules (scope control, ask vs. guess, output discipline)
-- Clean code principles specific to your stack
-- Security defaults
-- Testing requirements
-
-Keep it focused. Agents load this on every session start, so every line should earn its place.
-
-### Step 3 — Add reference docs
+### Step 3 — Author the always-on docs
 
 | File | What goes in it |
 |------|----------------|
-| `architecture.md` | Module map, service boundaries, tech stack, external integrations |
-| `error-conventions.md` | How errors are structured, HTTP codes used, retry rules, what NOT to swallow |
-| `anti-patterns.md` | Specific mistakes to avoid — with ❌ examples. Agents read this before writing code. |
-| `glossary.md` | Domain terms so the agent uses your vocabulary, not generic terms |
+| `core/guardrails.md` | Hard MUST / MUST NOT rules. Loaded on every task via `get_guardrails`. |
+| `core/definition-of-done.md` | Mechanical (gate scripts) + functional + security checks. |
+| `core/glossary.md` | Domain terms so the agent uses your vocabulary. |
+| `architecture/overview.md` | Module map, service boundaries, tech stack, external integrations. |
 
-### Step 4 — Add patterns
+### Step 4 — Languages, patterns, skills, workflows, gates
 
-Patterns live in `patterns/<name>.md`. A pattern is a **canonical code example** — "this is what good code looks like for this scenario." Use them for recurring implementation shapes: SFTP routes, REST producers, auth flows, schema registration, etc.
+- `languages/<lang>/standards.md` + `testing.md` + `anti-patterns.md` for each language the project actually uses.
+- `patterns/<name>.md` — canonical noun-named patterns ("what good looks like").
+- `skills/<action>.md` — verb-noun playbooks. Add `triggers:` and `see_also:` frontmatter so they show up correctly in `INDEX.md`.
+- `workflows/{new-feature,bug-fix,security-fix,refactor}.md` — task-driven flows. These are the agent's first stop after `start_task`.
+- `gates/README.md` + `gates/scripts/verify-<lang>.sh` (executable). The validator fails if a gate script is not executable.
 
-Each pattern file should include:
-- The rules that govern it (what's non-negotiable)
-- The canonical code block
-- Config/environment requirements
-- Error scenarios and how they're handled
+### Step 5 — Regenerate `INDEX.md` and validate
 
-### Step 5 — Add skills
+```bash
+python scripts/validate-rules.py --regen-index
+python scripts/validate-rules.py --check
+```
 
-Skills live in `skills/<action>.md`. A skill is a **step-by-step workflow** — "do these steps in this order." Use them for multi-step tasks developers repeat: adding a connector, registering a schema, debugging a failing route, creating a migration.
-
-Each skill file should include:
-- A trigger line (when to use this skill)
-- Numbered steps
-- Constraints (what NOT to do as part of this workflow)
+`--check` fails if any required file is missing, any doc lands in the
+`other` bucket, or `INDEX.md` is stale.
 
 ### Step 6 — Restart the server
 
@@ -136,45 +163,37 @@ cd mcp && uv run server.py
 
 Once connected, type task-focused prompts — the agent fetches the right rules automatically.
 
+### How agents use the server
+
+The MCP surface is designed so an agent can orient itself in **one** call
+and chain forward from there. The contract:
+
+| Tool | When to call |
+|---|---|
+| `start_task(project, task)` | **First call for any task.** Returns guardrails + the matched workflow + `Next Calls` pointing at the skills/patterns to fetch next. |
+| `get_guardrails(project)` | Re-read always-on rules mid-task. |
+| `get_index(project)` | Browse the trigger map without committing to a task. |
+| `get_agents_md(project)` | Identity / behavior doc. |
+| `get_architecture(project, name?)` | System overview, or a specific ADR. |
+| `get_language_rules(project, language, doc?)` | Language standards / testing / anti-patterns. |
+| `get_pattern(project, pattern)` | Canonical code pattern. |
+| `get_skill(project, skill)` | Verb-noun playbook. |
+| `get_workflow(project, name)` | One of `new-feature`, `bug-fix`, `security-fix`, `refactor`. |
+| `get_gate(project, name?)` | Gate README + script listing; or metadata for a specific `verify-*.sh`. |
+| `search_rules(query, …)` | BM25 fallback when nothing else matches. |
+| `list_projects()` / `list_rule_docs(project, doc_type?)` | Discovery. |
+
 ### Sample prompts
 
-**Starting a task (agent loads context on its own)**
 ```
 Add a new SFTP inbound route for payments to the apache-camel project.
-I need to add a Kafka consumer for the orders topic — check the rules first.
-Fix the retry logic on the payment route — follow our error conventions.
-Refactor the invoice processor — load the anti-patterns before writing anything.
+I need to fix a bug where the orders route is dropping messages.
+We have a CVE on Quarkus in integration-manager — patch it.
+Refactor the invoice processor without changing behavior.
 ```
 
-**Explicitly loading context**
-```
-Before we start, load the agents.md for the apache-camel project.
-Get the architecture doc for this project so you understand the module layout.
-Fetch the anti-patterns — I don't want those mistakes repeated.
-Get the add-route skill and follow it step by step.
-```
-
-**Pulling a specific pattern**
-```
-Get the SFTP route pattern for apache-camel and use it as the base for the new route.
-Use the REST producer pattern when implementing the billing API call.
-Show me the error-conventions doc before we write the error handler.
-```
-
-**Searching when you're not sure which doc to fetch**
-```
-Search the rules for anything about dead letter queues.
-Find docs about Keycloak authentication.
-Search for how we handle schema registration.
-Search for database migration conventions.
-```
-
-**Discovering what's available**
-```
-What projects are in the rules server?
-List all the patterns for apache-camel.
-What skills are available for this project?
-```
+The agent will call `start_task` first, then chain through the next calls
+the bundle returns.
 
 ---
 
@@ -224,6 +243,9 @@ auth = false
 |---------|--------------|-----|
 | Editor not showing server connected | URL wrong, server not reachable, or auth header missing | `curl <url>/healthz`; check firewall |
 | Server exits with "No markdown rule docs loaded" | No project directories with `.md` files found | Check that your project folder is next to `mcp/`, not inside it |
+| `validate-rules.py --check` reports `INDEX.md is out of date` | Frontmatter changed since INDEX was generated | `python scripts/validate-rules.py --regen-index` and commit the result |
+| `validate-rules.py` reports `does not match the expected layout` | A `.md` file landed outside the recognized folders | Move it under one of `core/`, `architecture/`, `languages/<lang>/`, `patterns/`, `skills/`, `workflows/`, `gates/` — or delete it |
+| Gate fails with "is not executable" | Script missing the executable bit | `chmod +x gates/scripts/<name>.sh` and commit |
 | "Project not found" from a tool | Typo in project name | Ask the agent: *"what projects are available?"* |
 | Agent gives outdated rules | Server cached files at startup | Restart the server after editing docs |
 | Dashboard shows everyone as `anon@<ip>` | Users haven't set `X-MCP-User` | See the Setup page in the dashboard for the correct config snippet |

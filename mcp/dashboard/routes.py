@@ -35,6 +35,7 @@ from metrics import MetricsStore
 
 if TYPE_CHECKING:
     from auth import AuthStore
+    from loader import RulesStore
     from session import DashboardSession
 
 _DASHBOARD_DIR = Path(__file__).resolve().parent
@@ -104,6 +105,8 @@ def build_dashboard_routes(
     auth_store: "AuthStore | None" = None,
     dashboard_session: "DashboardSession | None" = None,
     auth_enabled: bool = False,
+    rules_store: "RulesStore | None" = None,
+    rules_root: Path | None = None,
 ) -> list[BaseRoute]:
     templates = _build_templates()
 
@@ -241,6 +244,78 @@ def build_dashboard_routes(
             )
         )
 
+    async def guide_view(request: Request) -> Response:
+        return templates.TemplateResponse(
+            request, "guide.html", _ctx(request, page="guide")
+        )
+
+    # -- Projects (rule-corpus health) ---------------------------------------
+
+    def _score_all_projects() -> list:
+        """Score every project the rules loader knows about. Returns a list
+        of ProjectStatus, in alphabetical order."""
+        if rules_store is None or rules_root is None:
+            return []
+        from quality import score_project
+        return [
+            score_project(p, rules_store, rules_root / p)
+            for p in rules_store.projects()
+        ]
+
+    async def projects_view(request: Request) -> Response:
+        statuses = _score_all_projects()
+        return templates.TemplateResponse(
+            request,
+            "projects.html",
+            _ctx(
+                request,
+                page="projects",
+                projects=statuses,
+                rules_loaded=rules_store is not None,
+            ),
+        )
+
+    async def project_detail_view(request: Request) -> Response:
+        name = request.path_params.get("name", "")
+        if rules_store is None or rules_root is None:
+            return HTMLResponse(
+                "<p>Rules store unavailable.</p>", status_code=503
+            )
+        if name not in rules_store.projects():
+            return HTMLResponse(
+                f"<p>Project <code>{name}</code> not found.</p>",
+                status_code=404,
+            )
+        from quality import score_project
+        status = score_project(name, rules_store, rules_root / name)
+        # Group files by their top-level folder for display.
+        groups: dict[str, list] = {}
+        for fs in status.files:
+            head = fs.relative_path.split("/", 1)[0] if "/" in fs.relative_path else fs.relative_path
+            groups.setdefault(head, []).append(fs)
+        # Stable ordering of groups.
+        group_order = [
+            "AGENTS.md", "INDEX.md", "core", "architecture", "languages",
+            "patterns", "skills", "workflows", "gates",
+        ]
+        def _gkey(k: str) -> int:
+            try:
+                return group_order.index(k)
+            except ValueError:
+                return len(group_order)
+        ordered_groups = [(k, groups[k]) for k in sorted(groups, key=_gkey)]
+
+        return templates.TemplateResponse(
+            request,
+            "project_detail.html",
+            _ctx(
+                request,
+                page="projects",
+                status=status,
+                groups=ordered_groups,
+            ),
+        )
+
     async def setup_last_call_api(request: Request) -> Response:
         principal = scope_principal(request.scope)
         if principal is None or principal.user_id == "public":
@@ -365,6 +440,9 @@ def build_dashboard_routes(
         Route("/searches", endpoint=searches_view, methods=["GET"]),
         Route("/activity", endpoint=activity_view, methods=["GET"]),
         Route("/setup", endpoint=setup_view, methods=["GET"]),
+        Route("/guide", endpoint=guide_view, methods=["GET"]),
+        Route("/projects", endpoint=projects_view, methods=["GET"]),
+        Route("/projects/{name}", endpoint=project_detail_view, methods=["GET"]),
         Route("/api/me/last-call", endpoint=setup_last_call_api, methods=["GET"]),
         Route("/tokens", endpoint=tokens_view, methods=["GET"]),
         Route("/tokens/generate", endpoint=tokens_generate, methods=["POST"]),
