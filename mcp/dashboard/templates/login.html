@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login — {{ server_label }}</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/dashboard/static/style.css">
+
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--bg, #f9fafb); }
+    .login-wrap { width: 100%; max-width: 400px; padding: 1.5rem; }
+    .login-brand { display: flex; align-items: center; gap: .75rem; margin-bottom: 2rem; justify-content: center; }
+    .login-brand-mark { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, #6366f1, #4f46e5); display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; font-size: 1rem; }
+    .login-card { background: var(--surface, #fff); border: 1px solid var(--border, #e5e7eb); border-radius: 12px; padding: 2rem; box-shadow: 0 1px 6px rgba(0,0,0,.06); }
+    .login-title { font-size: 1.125rem; font-weight: 600; margin-bottom: .25rem; }
+    .login-sub { font-size: .8125rem; color: var(--text-muted, #6b7280); margin-bottom: 1.75rem; }
+    .field { display: flex; flex-direction: column; gap: .375rem; margin-bottom: 1rem; }
+    .field label { font-size: .75rem; font-weight: 600; color: var(--text-muted, #6b7280); text-transform: uppercase; letter-spacing: .05em; }
+    .field input, .field select { padding: .5rem .75rem; border: 1px solid var(--border, #e5e7eb); border-radius: .5rem; background: var(--surface, #fff); font-size: .875rem; font-family: inherit; width: 100%; box-sizing: border-box; }
+    .field input:focus, .field select:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,.15); }
+    .btn-login { width: 100%; padding: .625rem 1rem; background: #6366f1; color: #fff; border: none; border-radius: .5rem; font-size: .9375rem; font-weight: 600; cursor: pointer; margin-top: .5rem; font-family: inherit; }
+    .btn-login:hover { background: #4f46e5; }
+    .error-box { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.25); border-radius: .5rem; padding: .625rem .875rem; font-size: .8125rem; color: #dc2626; margin-bottom: 1.25rem; display: flex; gap: .5rem; align-items: flex-start; }
+    .login-footer { text-align: center; font-size: .75rem; color: var(--text-subtle, #9ca3af); margin-top: 1.5rem; }
+  </style>
+</head>
+<body>
+
+<div class="login-wrap">
+
+  <div class="login-brand">
+    <div class="login-brand-mark">M</div>
+    <div>
+      <div style="font-weight:600;font-size:.9375rem">{{ server_label }}</div>
+      <div style="font-size:.75rem;color:var(--text-muted,#6b7280)">MCP server</div>
+    </div>
+  </div>
+
+  <div class="login-card">
+    <div class="login-title">Sign in</div>
+    <div class="login-sub">Enter your credentials to access the dashboard</div>
+
+    {% if error %}
+    <div class="error-box">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/login{% if next_url_query %}?next={{ next_url_query }}{% endif %}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+
+      <div class="field">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" autocomplete="username" autofocus required>
+      </div>
+
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required>
+      </div>
+
+      <button type="submit" class="btn-login">Sign in</button>
+    </form>
+  </div>
+
+  <div class="login-footer">{{ server_label }} MCP server</div>
+
+</div>
+
+</body>
+</html>

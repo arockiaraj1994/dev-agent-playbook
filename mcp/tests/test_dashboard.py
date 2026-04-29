@@ -78,9 +78,15 @@ async def app_with_data(tmp_rules_root: Path, tmp_path: Path):
         editor_version="0.42",
     )
 
-    cfg = server.McpConfig(auth_enabled=False, keycloak=None)
+    from auth import AuthStore
+
+    auth_store = AuthStore(tmp_path / "auth.db")
+    await auth_store.init()
+    await auth_store.seed_default_admin("admin", "admin")
+
+    cfg = server.McpConfig(auth_enabled=False)
     app = server.build_app(
-        server.AppDeps(cfg=cfg, metrics=metrics, inactive_days=2, http_client=None),
+        server.AppDeps(cfg=cfg, metrics=metrics, inactive_days=2, auth_store=auth_store),
     )
     return app, server
 
@@ -105,9 +111,9 @@ async def test_users_page_lists_all_statuses(app_with_data) -> None:
 async def test_users_summary_counts(app_with_data) -> None:
     app, _ = app_with_data
     body = _client(app).get("/dashboard/", headers={"X-MCP-User": "v"}).text
-    # Adoption cards have specific labels.
-    assert ">2<" in body  # total
-    assert "configured" in body
+    # Adoption KPI card renders the configured count and status labels.
+    assert ">2<" in body  # total configured count
+    assert "inactive" in body  # KPI label "X inactive"
 
 
 async def test_tools_page_shows_call_counts(app_with_data) -> None:

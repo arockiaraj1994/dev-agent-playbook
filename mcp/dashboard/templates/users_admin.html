@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Manage Users — {{ server_label }}{% endblock %}
+{% block crumb %}Manage Users{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Manage Users</h1>
+    <p class="page-sub">Create user accounts and manage access roles</p>
+  </div>
+</div>
+
+{% if success %}
+<div class="callout" style="margin-bottom:1.5rem;border-color:var(--green,#22c55e)">
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--green,#22c55e)"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+  <div>{{ success }}</div>
+</div>
+{% endif %}
+
+{% if error %}
+<div class="callout" style="margin-bottom:1.5rem;border-color:var(--red,#ef4444)">
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--red,#ef4444)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+  <div>{{ error }}</div>
+</div>
+{% endif %}
+
+<!-- Create user form -->
+<div class="card" style="margin-bottom:2rem">
+  <div class="card-header">
+    <h2 class="section-title">Create User</h2>
+  </div>
+  <form method="post" action="/dashboard/users-admin/create" style="display:flex;gap:1rem;align-items:flex-end;flex-wrap:wrap;padding:1rem 1.25rem">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <div style="display:flex;flex-direction:column;gap:.375rem">
+      <label style="font-size:.75rem;font-weight:600;color:var(--text-muted,#6b7280);text-transform:uppercase;letter-spacing:.05em">Username</label>
+      <input type="text" name="username" required placeholder="e.g. alice"
+             style="padding:.5rem .75rem;border:1px solid var(--border,#e5e7eb);border-radius:.5rem;background:var(--surface,#fff);font-size:.875rem;min-width:180px;font-family:inherit">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.375rem">
+      <label style="font-size:.75rem;font-weight:600;color:var(--text-muted,#6b7280);text-transform:uppercase;letter-spacing:.05em">Password</label>
+      <input type="password" name="password" required placeholder="••••••••"
+             style="padding:.5rem .75rem;border:1px solid var(--border,#e5e7eb);border-radius:.5rem;background:var(--surface,#fff);font-size:.875rem;min-width:180px;font-family:inherit">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.375rem">
+      <label style="font-size:.75rem;font-weight:600;color:var(--text-muted,#6b7280);text-transform:uppercase;letter-spacing:.05em">Role</label>
+      <select name="role" style="padding:.5rem .75rem;border:1px solid var(--border,#e5e7eb);border-radius:.5rem;background:var(--surface,#fff);font-size:.875rem;min-width:120px">
+        <option value="user">User</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    <button type="submit" style="padding:.5rem 1.25rem;background:var(--accent,#6366f1);color:#fff;border:none;border-radius:.5rem;font-size:.875rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:.5rem">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Create User
+    </button>
+  </form>
+</div>
+
+<!-- User list -->
+<div class="section-header" style="margin-bottom:.75rem">
+  <h2 class="section-title">All Users</h2>
+  <span class="muted" style="font-size:.8125rem">{{ auth_users|length }} user{% if auth_users|length != 1 %}s{% endif %}</span>
+</div>
+
+{% if auth_users %}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:.875rem">
+  {% for u in auth_users %}
+  {% set colors = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6'] %}
+  {% set color = colors[loop.index0 % colors|length] %}
+  <div class="card" style="padding:0">
+    <div style="padding:1.25rem">
+      <div style="display:flex;align-items:flex-start;gap:1rem">
+        <!-- Avatar -->
+        <div style="width:44px;height:44px;border-radius:12px;background:{{ color }};display:flex;align-items:center;justify-content:center;font-size:1.125rem;font-weight:700;color:#fff;flex-shrink:0;letter-spacing:-.02em">
+          {{ u.username[0].upper() }}
+        </div>
+        <!-- Info -->
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+            <span style="font-weight:600;font-size:.9375rem;color:var(--text,#111827);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ u.username }}</span>
+            {% if u.role == 'admin' %}
+              <span style="font-size:.6875rem;font-weight:700;padding:.15rem .5rem;border-radius:.25rem;background:rgba(99,102,241,.12);color:#6366f1;letter-spacing:.04em;text-transform:uppercase;border:1px solid rgba(99,102,241,.2)">Admin</span>
+            {% else %}
+              <span style="font-size:.6875rem;font-weight:600;padding:.15rem .5rem;border-radius:.25rem;background:var(--surface-alt,#f3f4f6);color:var(--text-muted,#6b7280);letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--border,#e5e7eb)">User</span>
+            {% endif %}
+          </div>
+          <div style="font-size:.75rem;color:var(--text-subtle,#9ca3af);margin-top:.3rem">
+            Joined {{ u.created_at | short_dt }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="empty-state">
+  <p class="muted">No users found.</p>
+</div>
+{% endif %}
+
+{% endblock %}

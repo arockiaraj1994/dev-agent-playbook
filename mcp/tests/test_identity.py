@@ -1,4 +1,4 @@
-"""Tests for identity.py — anonymous fallback, header parsing, middleware."""
+"""Tests for identity.py (MCP Bearer auth) and server.AppAuthMiddleware."""
 
 from __future__ import annotations
 
@@ -18,13 +18,20 @@ def _scope(
     headers: list[tuple[bytes, bytes]] | None = None,
     query: bytes = b"",
     client: tuple[str, int] | None = None,
+    path: str = "/sse",
 ) -> dict:
     return {
         "type": "http",
         "headers": headers or [],
         "query_string": query,
         "client": client,
+        "path": path,
     }
+
+
+# ---------------------------------------------------------------------------
+# Header / IP / bearer helpers
+# ---------------------------------------------------------------------------
 
 
 def test_header_lookup_case_insensitive() -> None:
@@ -78,6 +85,7 @@ def test_anonymous_principal_uses_x_mcp_user() -> None:
     assert isinstance(p, Principal)
     assert p.user_name == "alice"
     assert p.user_id.startswith("hdr:")
+    assert p.role == "user"
 
 
 def test_anonymous_principal_uses_query_user() -> None:
@@ -93,7 +101,9 @@ def test_anonymous_principal_falls_back_to_ip() -> None:
     assert p.user_name == "anon@10.1.2.3"
 
 
-# -- editor detection (from server.py — lives close to identity in spirit) --
+# ---------------------------------------------------------------------------
+# Editor detection
+# ---------------------------------------------------------------------------
 
 
 def test_editor_from_user_agent_known_clients() -> None:
@@ -120,9 +130,21 @@ def test_editor_from_user_agent_unknown() -> None:
     assert e.name == "somethingelse"
 
 
+# ---------------------------------------------------------------------------
+# AppAuthMiddleware — anonymous (auth off)
+# ---------------------------------------------------------------------------
+
+
 @pytest.mark.asyncio
-async def test_identity_middleware_anonymous(tmp_path) -> None:
-    from identity import IdentityMiddleware, principal_var
+async def test_app_auth_middleware_anonymous(tmp_path) -> None:
+    from auth import AuthStore
+    from server import AppAuthMiddleware
+    from session import DashboardSession
+    from identity import principal_var
+
+    auth_store = AuthStore(tmp_path / "auth.db")
+    await auth_store.init()
+    dashboard_session = DashboardSession(auth_store)
 
     captured: list[Principal | None] = []
 
@@ -131,11 +153,17 @@ async def test_identity_middleware_anonymous(tmp_path) -> None:
         await send({"type": "http.response.start", "status": 204, "headers": []})
         await send({"type": "http.response.body", "body": b""})
 
-    mw = IdentityMiddleware(app, auth_enabled=False, keycloak=None, http_client=None)
+    mw = AppAuthMiddleware(
+        app,
+        auth_enabled=False,
+        auth_store=auth_store,
+        dashboard_session=dashboard_session,
+    )
     scope = {
         "type": "http",
         "headers": [(b"x-mcp-user", b"alice")],
         "query_string": b"",
+        "path": "/sse",
     }
     sent: list = []
 
@@ -151,35 +179,259 @@ async def test_identity_middleware_anonymous(tmp_path) -> None:
     assert sent[0]["status"] == 204
 
 
-@pytest.mark.asyncio
-async def test_identity_middleware_auth_required_returns_401() -> None:
-    import httpx
+# ---------------------------------------------------------------------------
+# AppAuthMiddleware — MCP path, auth on, no token → 401
+# ---------------------------------------------------------------------------
 
-    from identity import IdentityMiddleware, KeycloakConfig
+
+@pytest.mark.asyncio
+async def test_app_auth_middleware_mcp_no_token_returns_401(tmp_path) -> None:
+    from auth import AuthStore
+    from server import AppAuthMiddleware
+    from session import DashboardSession
+
+    auth_store = AuthStore(tmp_path / "auth.db")
+    await auth_store.init()
+    dashboard_session = DashboardSession(auth_store)
 
     async def app(scope, receive, send):
         raise AssertionError("inner app should not be called")
 
-    async with httpx.AsyncClient() as client:
-        mw = IdentityMiddleware(
-            app,
-            auth_enabled=True,
-            keycloak=KeycloakConfig(
-                introspect_url="https://example.invalid/i",
-                client_id="x",
-                client_secret="y",
-            ),
-            http_client=client,
-        )
-        sent: list = []
+    mw = AppAuthMiddleware(
+        app,
+        auth_enabled=True,
+        auth_store=auth_store,
+        dashboard_session=dashboard_session,
+    )
+    sent: list = []
 
-        async def receive():
-            return {"type": "http.request", "body": b"", "more_body": False}
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
 
-        async def send(msg):
-            sent.append(msg)
+    async def send(msg):
+        sent.append(msg)
 
-        scope = {"type": "http", "headers": [], "query_string": b""}
-        await mw(scope, receive, send)
-
+    scope = {"type": "http", "headers": [], "query_string": b"", "path": "/sse"}
+    await mw(scope, receive, send)
     assert sent[0]["status"] == 401
+
+
+# ---------------------------------------------------------------------------
+# AppAuthMiddleware — MCP path, valid Bearer token → 204
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_app_auth_middleware_valid_mcp_token(tmp_path) -> None:
+    from auth import AuthStore
+    from server import AppAuthMiddleware
+    from session import DashboardSession
+    from identity import principal_var
+
+    auth_store = AuthStore(tmp_path / "auth.db")
+    await auth_store.init()
+    await auth_store.seed_default_admin("admin", "secret")
+    user = await auth_store.verify_login("admin", "secret")
+    token_data = await auth_store.create_token(user["id"], None, token_type="mcp")
+    token = token_data["token"]
+
+    dashboard_session = DashboardSession(auth_store)
+    captured: list[Principal | None] = []
+
+    async def app(scope, receive, send):
+        captured.append(principal_var.get())
+        await send({"type": "http.response.start", "status": 204, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    mw = AppAuthMiddleware(
+        app,
+        auth_enabled=True,
+        auth_store=auth_store,
+        dashboard_session=dashboard_session,
+    )
+    sent: list = []
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(msg):
+        sent.append(msg)
+
+    scope = {
+        "type": "http",
+        "headers": [(b"authorization", f"Bearer {token}".encode())],
+        "query_string": b"",
+        "path": "/sse",
+    }
+    await mw(scope, receive, send)
+    assert sent[0]["status"] == 204
+    assert captured[0].user_name == "admin"
+    assert captured[0].role == "admin"
+
+
+# ---------------------------------------------------------------------------
+# AppAuthMiddleware — session token in Bearer header → 401 (type mismatch)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_session_token_rejected_on_mcp_path(tmp_path) -> None:
+    from auth import AuthStore
+    from server import AppAuthMiddleware
+    from session import DashboardSession
+
+    auth_store = AuthStore(tmp_path / "auth.db")
+    await auth_store.init()
+    await auth_store.seed_default_admin("admin", "pw")
+    user = await auth_store.verify_login("admin", "pw")
+    token_data = await auth_store.create_token(user["id"], None, token_type="session")
+    token = token_data["token"]
+
+    dashboard_session = DashboardSession(auth_store)
+
+    async def app(scope, receive, send):
+        raise AssertionError("inner app should not be called")
+
+    mw = AppAuthMiddleware(
+        app,
+        auth_enabled=True,
+        auth_store=auth_store,
+        dashboard_session=dashboard_session,
+    )
+    sent: list = []
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(msg):
+        sent.append(msg)
+
+    scope = {
+        "type": "http",
+        "headers": [(b"authorization", f"Bearer {token}".encode())],
+        "query_string": b"",
+        "path": "/sse",
+    }
+    await mw(scope, receive, send)
+    assert sent[0]["status"] == 401
+
+
+# ---------------------------------------------------------------------------
+# AppAuthMiddleware — /auth/login public path → no auth check
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_public_path_bypasses_auth(tmp_path) -> None:
+    from auth import AuthStore
+    from server import AppAuthMiddleware
+    from session import DashboardSession
+
+    auth_store = AuthStore(tmp_path / "auth.db")
+    await auth_store.init()
+    dashboard_session = DashboardSession(auth_store)
+
+    inner_called = []
+
+    async def app(scope, receive, send):
+        inner_called.append(True)
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    mw = AppAuthMiddleware(
+        app,
+        auth_enabled=True,
+        auth_store=auth_store,
+        dashboard_session=dashboard_session,
+    )
+    sent: list = []
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(msg):
+        sent.append(msg)
+
+    scope = {"type": "http", "headers": [], "query_string": b"", "path": "/auth/login"}
+    await mw(scope, receive, send)
+    assert inner_called
+    assert sent[0]["status"] == 200
+
+
+# ---------------------------------------------------------------------------
+# AppAuthMiddleware — /dashboard with no cookie → 302 redirect to /login
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_unknown_login_prefixed_path_does_not_hit_dashboard_branch(tmp_path) -> None:
+    """`/loginx` must not be treated as a login/dashboard route just because it starts with /login."""
+    from auth import AuthStore
+    from server import AppAuthMiddleware
+    from session import DashboardSession
+
+    auth_store = AuthStore(tmp_path / "auth.db")
+    await auth_store.init()
+    dashboard_session = DashboardSession(auth_store)
+
+    inner_called: list[bool] = []
+
+    async def app(scope, receive, send):
+        inner_called.append(True)
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    mw = AppAuthMiddleware(
+        app,
+        auth_enabled=True,
+        auth_store=auth_store,
+        dashboard_session=dashboard_session,
+    )
+    sent: list = []
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(msg):
+        sent.append(msg)
+
+    scope = {"type": "http", "headers": [], "query_string": b"", "path": "/loginx"}
+    await mw(scope, receive, send)
+    # Should NOT have sent a 302 redirect to /login (the dashboard branch's behavior).
+    # The fallback "anonymous" branch lets it pass through to the inner app.
+    assert sent[0]["status"] != 302
+    assert inner_called
+
+
+@pytest.mark.asyncio
+async def test_dashboard_no_cookie_redirects_to_login(tmp_path) -> None:
+    from auth import AuthStore
+    from server import AppAuthMiddleware
+    from session import DashboardSession
+
+    auth_store = AuthStore(tmp_path / "auth.db")
+    await auth_store.init()
+    dashboard_session = DashboardSession(auth_store)
+
+    async def app(scope, receive, send):
+        raise AssertionError("inner app should not be called")
+
+    mw = AppAuthMiddleware(
+        app,
+        auth_enabled=True,
+        auth_store=auth_store,
+        dashboard_session=dashboard_session,
+    )
+    sent: list = []
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(msg):
+        sent.append(msg)
+
+    scope = {"type": "http", "headers": [], "query_string": b"", "path": "/dashboard/"}
+    await mw(scope, receive, send)
+    assert sent[0]["status"] == 302
+    location = dict(sent[0]["headers"]).get(b"location", b"").decode()
+    assert location.startswith("/login")

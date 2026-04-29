@@ -7,26 +7,35 @@ Sections:
   /dashboard/searches        — search query log + zero-result queries
   /dashboard/activity        — recent calls (last 100)
   /dashboard/users/{name}    — per-user drill-down
+  /dashboard/tokens          — MCP token management (all authenticated users)
+  /dashboard/users-admin     — user management (admin only)
   /dashboard/static/...      — CSS
 
-Authentication is handled at the app level by `IdentityMiddleware`. When
-`auth.enabled` is true the middleware rejects unauthenticated requests with
-401 before they ever reach these handlers.
+Authentication is handled at the app level by AppAuthMiddleware. When
+auth.enabled is true the middleware rejects / redirects unauthenticated
+requests before they reach these handlers.
+
+CSRF: All state-changing POST handlers validate the double-submit cookie.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, Response
+from starlette.responses import HTMLResponse, RedirectResponse, Response
 from starlette.routing import BaseRoute, Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
 from identity import scope_principal
 from metrics import MetricsStore
+
+if TYPE_CHECKING:
+    from auth import AuthStore
+    from session import DashboardSession
 
 _DASHBOARD_DIR = Path(__file__).resolve().parent
 _TEMPLATES_DIR = _DASHBOARD_DIR / "templates"
@@ -55,7 +64,6 @@ def _parse_iso(value: str | None) -> datetime | None:
 
 
 def _since_filter(value: str | None) -> str:
-    """Turn an ISO timestamp into a coarse 'X ago' string."""
     dt = _parse_iso(value)
     if dt is None:
         return "—"
@@ -74,8 +82,7 @@ def _since_filter(value: str | None) -> str:
     hours = minutes // 60
     if hours < 48:
         return f"{hours}h ago"
-    days = hours // 24
-    return f"{days}d ago"
+    return f"{hours // 24}d ago"
 
 
 def _short_dt_filter(value: str | None) -> str:
@@ -94,31 +101,53 @@ def build_dashboard_routes(
     store: MetricsStore,
     inactive_days: int,
     server_label: str = "dev-agent-playbook",
+    auth_store: "AuthStore | None" = None,
+    dashboard_session: "DashboardSession | None" = None,
+    auth_enabled: bool = False,
 ) -> list[BaseRoute]:
-    """
-    Build Starlette routes for /dashboard/*.
-
-    `store` and `inactive_days` are captured by closure so each request gets
-    the same backend. Routes are stateless beyond that.
-    """
     templates = _build_templates()
+
+    def _csrf_token(request: Request) -> str:
+        """Read existing CSRF cookie or the middleware-generated fresh token."""
+        if dashboard_session is not None:
+            existing = dashboard_session.read_csrf_cookie(request.scope)
+            if existing:
+                return existing
+        # Middleware may have generated a fresh token and stashed it in scope state
+        fresh = (request.scope.get("state") or {}).get("_fresh_csrf")
+        if fresh:
+            return fresh
+        from session import DashboardSession as _DS
+        return _DS.generate_csrf_token()
+
+    def _validate_csrf_or_403(request: Request, form: dict) -> Response | None:
+        """Return a 403 Response if CSRF validation fails, else None."""
+        if dashboard_session is None:
+            return None
+        cookie_val = dashboard_session.read_csrf_cookie(request.scope)
+        form_val = str(form.get("_csrf", ""))
+        if not dashboard_session.validate_csrf(cookie_val, form_val):
+            return HTMLResponse("403 Forbidden — invalid CSRF token.", status_code=403)
+        return None
 
     def _ctx(request: Request, **extra: object) -> dict:
         principal = scope_principal(request.scope)
+        is_admin = principal is not None and getattr(principal, "role", "user") == "admin"
+        csrf_token = _csrf_token(request)
         return {
             "request": request,
             "principal": principal,
+            "is_admin": is_admin,
             "inactive_days": inactive_days,
             "server_label": server_label,
-            "nav": [
-                ("Users", "/dashboard/"),
-                ("Tools", "/dashboard/tools"),
-                ("Searches", "/dashboard/searches"),
-                ("Activity", "/dashboard/activity"),
-                ("Setup", "/dashboard/setup"),
-            ],
+            "csrf_token": csrf_token,
             **extra,
         }
+
+    def _forbidden(request: Request) -> Response:
+        return HTMLResponse("<p>403 Forbidden — admin access required.</p>", status_code=403)
+
+    # -- Read-only views -----------------------------------------------------
 
     async def dashboard_view(request: Request) -> Response:
         import json as _json
@@ -153,13 +182,7 @@ def build_dashboard_routes(
         return templates.TemplateResponse(
             request,
             "tools.html",
-            _ctx(
-                request,
-                tool_stats=tool_stats,
-                doc_fetches=doc_fetches,
-                window_days=window_days,
-                page="tools",
-            ),
+            _ctx(request, tool_stats=tool_stats, doc_fetches=doc_fetches, window_days=window_days, page="tools"),
         )
 
     async def searches_view(request: Request) -> Response:
@@ -168,12 +191,7 @@ def build_dashboard_routes(
         return templates.TemplateResponse(
             request,
             "searches.html",
-            _ctx(
-                request,
-                recent_searches=recent,
-                zero_result_searches=zero_result,
-                page="searches",
-            ),
+            _ctx(request, recent_searches=recent, zero_result_searches=zero_result, page="searches"),
         )
 
     async def activity_view(request: Request) -> Response:
@@ -189,29 +207,135 @@ def build_dashboard_routes(
         detail = await store.get_user(user_name=name, inactive_days=inactive_days)
         if detail is None:
             return HTMLResponse(
-                f"<p>User <code>{_html_escape(name)}</code> not found.</p>",
-                status_code=404,
+                f"<p>User <code>{_html_escape(name)}</code> not found.</p>", status_code=404
             )
         return templates.TemplateResponse(
-            request,
-            "user_detail.html",
-            _ctx(request, detail=detail, page="users"),
+            request, "user_detail.html", _ctx(request, detail=detail, page="users")
         )
 
     async def setup_view(request: Request) -> Response:
         base = str(request.base_url).rstrip("/")
         sse_url = f"{base}/sse"
+        auth_token: str | None = None
+        principal = scope_principal(request.scope)
+        if auth_enabled and auth_store is not None and principal is not None and principal.user_id != "public":
+            all_tokens = await auth_store.list_tokens(principal.user_id)
+            active = [t for t in all_tokens if t["active"]]
+            if active:
+                auth_token = active[0]["token"]
         return templates.TemplateResponse(
-            request,
-            "setup.html",
-            _ctx(request, sse_url=sse_url, page="setup"),
+            request, "setup.html", _ctx(
+                request,
+                sse_url=sse_url,
+                page="setup",
+                auth_enabled=auth_enabled,
+                auth_token=auth_token,
+            )
         )
 
-    static = Mount(
-        "/static",
-        app=StaticFiles(directory=str(_STATIC_DIR)),
-        name="static",
-    )
+    # -- MCP token management (all authenticated users) ----------------------
+
+    async def tokens_view(request: Request) -> Response:
+        principal = scope_principal(request.scope)
+        tokens: list[dict] = []
+        error: str | None = None
+        success: str | None = None
+        if auth_store is not None and principal is not None and principal.user_id != "public":
+            tokens = await auth_store.list_tokens(principal.user_id)
+        if request.query_params.get("generated"):
+            success = "Token generated successfully."
+        if request.query_params.get("revoked"):
+            success = "Token revoked."
+        if request.query_params.get("error"):
+            error = "An error occurred."
+        return templates.TemplateResponse(
+            request,
+            "tokens.html",
+            _ctx(request, tokens=tokens, error=error, success=success, page="tokens"),
+        )
+
+    async def tokens_generate(request: Request) -> Response:
+        principal = scope_principal(request.scope)
+        if auth_store is None or principal is None or principal.user_id == "public":
+            return RedirectResponse("/dashboard/tokens?error=1", status_code=303)
+        form = await request.form()
+        csrf_err = _validate_csrf_or_403(request, form)
+        if csrf_err:
+            return csrf_err
+        raw_days = str(form.get("expires_in_days", "")).strip()
+        expires_in_days: int | None = None
+        if raw_days and raw_days != "0":
+            try:
+                expires_in_days = int(raw_days)
+            except ValueError:
+                return RedirectResponse("/dashboard/tokens?error=1", status_code=303)
+        await auth_store.create_token(principal.user_id, expires_in_days, token_type="mcp")
+        return RedirectResponse("/dashboard/tokens?generated=1", status_code=303)
+
+    async def tokens_revoke(request: Request) -> Response:
+        principal = scope_principal(request.scope)
+        if auth_store is None or principal is None or principal.user_id == "public":
+            return RedirectResponse("/dashboard/tokens?error=1", status_code=303)
+        form = await request.form()
+        csrf_err = _validate_csrf_or_403(request, form)
+        if csrf_err:
+            return csrf_err
+        token = str(form.get("token", "")).strip()
+        if token:
+            is_admin = getattr(principal, "role", "user") == "admin"
+            user_tokens = await auth_store.list_tokens(principal.user_id)
+            owned = {t["token"] for t in user_tokens}
+            if is_admin or token in owned:
+                await auth_store.revoke_token(token)
+        return RedirectResponse("/dashboard/tokens?revoked=1", status_code=303)
+
+    # -- Admin: user management (admin only) ---------------------------------
+
+    async def users_admin_view(request: Request) -> Response:
+        principal = scope_principal(request.scope)
+        if principal is None or getattr(principal, "role", "user") != "admin":
+            return _forbidden(request)
+        users: list[dict] = []
+        error: str | None = None
+        success: str | None = None
+        if auth_store is not None:
+            users = await auth_store.list_users()
+        if request.query_params.get("created"):
+            success = "User created successfully."
+        if request.query_params.get("error") == "duplicate":
+            error = "Username already exists."
+        elif request.query_params.get("error"):
+            error = "An error occurred."
+        return templates.TemplateResponse(
+            request,
+            "users_admin.html",
+            _ctx(request, auth_users=users, error=error, success=success, page="users-admin"),
+        )
+
+    async def users_admin_create(request: Request) -> Response:
+        principal = scope_principal(request.scope)
+        if principal is None or getattr(principal, "role", "user") != "admin":
+            return _forbidden(request)
+        if auth_store is None:
+            return RedirectResponse("/dashboard/users-admin?error=1", status_code=303)
+        form = await request.form()
+        csrf_err = _validate_csrf_or_403(request, form)
+        if csrf_err:
+            return csrf_err
+        username = str(form.get("username", "")).strip()
+        password = str(form.get("password", "")).strip()
+        role = str(form.get("role", "user")).strip()
+        if role not in ("admin", "user"):
+            role = "user"
+        if not username or not password:
+            return RedirectResponse("/dashboard/users-admin?error=1", status_code=303)
+        try:
+            await auth_store.create_user(username, password, role)
+        except Exception:
+            return RedirectResponse("/dashboard/users-admin?error=duplicate", status_code=303)
+        return RedirectResponse("/dashboard/users-admin?created=1", status_code=303)
+
+    static = Mount("/static", app=StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
     return [
         Route("/", endpoint=dashboard_view, methods=["GET"]),
@@ -220,6 +344,11 @@ def build_dashboard_routes(
         Route("/searches", endpoint=searches_view, methods=["GET"]),
         Route("/activity", endpoint=activity_view, methods=["GET"]),
         Route("/setup", endpoint=setup_view, methods=["GET"]),
+        Route("/tokens", endpoint=tokens_view, methods=["GET"]),
+        Route("/tokens/generate", endpoint=tokens_generate, methods=["POST"]),
+        Route("/tokens/revoke", endpoint=tokens_revoke, methods=["POST"]),
+        Route("/users-admin", endpoint=users_admin_view, methods=["GET"]),
+        Route("/users-admin/create", endpoint=users_admin_create, methods=["POST"]),
         Route("/users/{name}", endpoint=user_detail_view, methods=["GET"]),
         static,
     ]

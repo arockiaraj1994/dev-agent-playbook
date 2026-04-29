@@ -2,6 +2,12 @@
 # When the file is missing, defaults match: enable.auth = false.
 
 [enable]
-# If true (SSE only), require Bearer tokens validated via Keycloak introspection
-# and set KEYCLOAK_URL, KEYCLOAK_REALM, MCP_CLIENT_ID, MCP_CLIENT_SECRET.
-auth = false
+# If true, Bearer tokens are required for /sse and /dashboard.
+# Tokens are issued via POST /auth/login and managed in /dashboard/tokens.
+auth = true
+
+[admin]
+# Default admin credentials seeded on first run (when no users exist).
+# Override via MCP_ADMIN_USER and MCP_ADMIN_PASSWORD environment variables.
+username = "admin"
+password = "admin"

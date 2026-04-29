@@ -4,6 +4,8 @@
 
 {% block content %}
 
+{% set token_val = auth_token if auth_token else "YOUR_TOKEN" %}
+
 <div class="page-header">
   <div>
     <h1 class="page-title">Setup</h1>
@@ -34,10 +36,25 @@
         <pre class="code-block">{{ sse_url }}</pre>
         <button class="code-copy">copy</button>
       </div>
+
+      {% if auth_enabled %}
+        {% if auth_token %}
+        <div class="callout" style="border-color:var(--green,#22c55e)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px;color:var(--green,#22c55e)"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <div>Your token is <strong>pre-filled</strong> in the config snippets below. Treat it like a password — don't share it or commit it to source control. You can manage your tokens in <a href="/dashboard/tokens"><strong>Tokens</strong></a>.</div>
+        </div>
+        {% else %}
+        <div class="callout" style="border-color:#f59e0b;background:rgba(245,158,11,.04)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px;color:#d97706"><path d="m10.29 3.86-8.66 15A1 1 0 0 0 2.5 20.5h19a1 1 0 0 0 .87-1.5l-8.66-15a1 1 0 0 0-1.74 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <div>This server requires authentication. <a href="/dashboard/tokens"><strong>Generate a token →</strong></a> then return here — the snippets will be pre-filled automatically.</div>
+        </div>
+        {% endif %}
+      {% else %}
       <div class="callout">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
         <div>If your server requires authentication, generate a personal token from <strong>Settings → Tokens</strong>. Tokens are scoped per user so usage attributes correctly in this dashboard.</div>
       </div>
+      {% endif %}
     </section>
 
     <!-- Connect an editor -->
@@ -73,16 +90,23 @@
         <p>If the server requires a token, pass it as a header:</p>
         <div class="code-wrap">
           <pre class="code-block">claude mcp add {{ server_label }} --transport sse \
-  --header "Authorization: Bearer $YOUR_TOKEN" \
+  --header "Authorization: Bearer {{ token_val }}" \
   {{ sse_url }}</pre>
           <button class="code-copy">copy</button>
         </div>
+        {% if auth_enabled and auth_token %}
+        <p style="font-size:.8125rem;color:var(--text-muted,#6b7280);margin-top:.5rem">Token pre-filled from your account.</p>
+        {% elif auth_enabled and not auth_token %}
+        <p style="font-size:.8125rem;margin-top:.5rem"><a href="/dashboard/tokens">Generate a token →</a> to get the pre-filled command.</p>
+        {% endif %}
 
         <h3>3. Project-scoped install (optional)</h3>
         <p>To make the server available only inside one repository, run the same command from inside the repo with <code>--scope project</code>:</p>
         <div class="code-wrap">
           <pre class="code-block">cd ~/code/my-app
-claude mcp add {{ server_label }} --transport sse --scope project {{ sse_url }}</pre>
+claude mcp add {{ server_label }} --transport sse --scope project \
+  --header "Authorization: Bearer {{ token_val }}" \
+  {{ sse_url }}</pre>
           <button class="code-copy">copy</button>
         </div>
 
@@ -116,13 +140,18 @@ claude mcp add {{ server_label }} --transport sse --scope project {{ sse_url }}<
     "{{ server_label }}": {
       "url": "{{ sse_url }}",
       "headers": {
-        "Authorization": "Bearer YOUR_TOKEN"
+        "Authorization": "Bearer {{ token_val }}"
       }
     }
   }
 }</pre>
           <button class="code-copy">copy</button>
         </div>
+        {% if auth_enabled and auth_token %}
+        <p style="font-size:.8125rem;color:var(--text-muted,#6b7280);margin-top:.5rem">Token pre-filled from your account.</p>
+        {% elif auth_enabled and not auth_token %}
+        <p style="font-size:.8125rem;margin-top:.5rem"><a href="/dashboard/tokens">Generate a token →</a> to get the pre-filled config.</p>
+        {% endif %}
 
         <h3>3. Project-scoped install</h3>
         <p>For per-project config, create <code>.cursor/mcp.json</code> at your repo root with the same structure. Cursor merges project + user configs at runtime.</p>
@@ -152,12 +181,17 @@ claude mcp add {{ server_label }} --transport sse --scope project {{ sse_url }}<
   "mcpServers": {
     "{{ server_label }}": {
       "serverUrl": "{{ sse_url }}",
-      "headers": { "Authorization": "Bearer YOUR_TOKEN" }
+      "headers": { "Authorization": "Bearer {{ token_val }}" }
     }
   }
 }</pre>
           <button class="code-copy">copy</button>
         </div>
+        {% if auth_enabled and auth_token %}
+        <p style="font-size:.8125rem;color:var(--text-muted,#6b7280);margin-top:.5rem">Token pre-filled from your account.</p>
+        {% elif auth_enabled and not auth_token %}
+        <p style="font-size:.8125rem;margin-top:.5rem"><a href="/dashboard/tokens">Generate a token →</a> to get the pre-filled config.</p>
+        {% endif %}
 
         <h3>3. Restart</h3>
         <p>Restart Windsurf, then open Cascade and confirm the server appears in the MCP server list.</p>
