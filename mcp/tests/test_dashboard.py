@@ -214,3 +214,29 @@ async def test_setup_page_nav_link_present(app_with_data) -> None:
     app, _ = app_with_data
     body = _client(app).get("/dashboard/", headers={"X-MCP-User": "v"}).text
     assert "/dashboard/setup" in body
+
+
+async def test_setup_status_pill_active_for_user_with_calls(app_with_data) -> None:
+    app, _ = app_with_data
+    body = _client(app).get("/dashboard/setup", headers={"X-MCP-User": "alice"}).text
+    assert 'id="connect-status"' in body
+    assert "is-active" in body
+    assert "Connected" in body
+
+
+async def test_setup_status_pill_waiting_for_unknown_user(app_with_data) -> None:
+    app, _ = app_with_data
+    body = _client(app).get("/dashboard/setup", headers={"X-MCP-User": "bob"}).text
+    assert 'id="connect-status"' in body
+    assert "Waiting for first call" in body
+    # bob is registered but has never called, so the pill is NOT active.
+    assert "is-active" not in body.split('id="connect-status"')[1].split("</div>")[0]
+
+
+async def test_last_call_api_returns_json(app_with_data) -> None:
+    app, _ = app_with_data
+    r = _client(app).get("/dashboard/api/me/last-call", headers={"X-MCP-User": "alice"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["user"] == "alice"
+    assert data["last_call"] is not None

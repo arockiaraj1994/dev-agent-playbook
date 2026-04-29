@@ -5,24 +5,43 @@
 {% block content %}
 
 {% set token_val = auth_token if auth_token else "YOUR_TOKEN" %}
+{% set needs_token = auth_enabled and not auth_token %}
 
 <div class="page-header">
   <div>
     <h1 class="page-title">Setup</h1>
-    <p class="page-sub">Connect your editor to this MCP server, and learn how to add new rule docs</p>
+    <p class="page-sub">Connect your editor and start asking your AI for project rules.</p>
+  </div>
+  <div
+    id="connect-status"
+    class="status-pill {% if last_call %}is-active{% endif %}"
+    aria-live="polite"
+    data-last-call="{{ last_call or '' }}"
+  >
+    <span class="pill-dot"></span>
+    <span class="pill-label">
+      {% if last_call %}Connected — last call <span class="pill-rel">{{ last_call|since }}</span>{% else %}Waiting for first call…{% endif %}
+    </span>
   </div>
 </div>
+
+{% if token_generated %}
+<div class="callout-success" role="status">
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+  <div>Token generated. The snippets below are now pre-filled — copy one and paste it into your editor.</div>
+</div>
+{% endif %}
 
 <div class="setup-layout">
 
   <!-- TOC -->
-  <nav class="toc" id="setup-toc">
+  <nav class="toc" id="setup-toc" aria-label="Setup sections">
     <div class="toc-section">Get started</div>
-    <a href="#server"  class="active" data-toc="server">Your server URL</a>
-    <a href="#editors" data-toc="editors">Connect an editor</a>
-    <div class="toc-section">Manage</div>
-    <a href="#rules"   data-toc="rules">Add project rules</a>
-    <a href="#verify"  data-toc="verify">Verify it works</a>
+    <a href="#server"   class="active" data-toc="server">Your server URL</a>
+    <a href="#editors"  data-toc="editors">Connect an editor</a>
+    <a href="#verify"   data-toc="verify">Verify it works</a>
+    <div class="toc-section">Next steps</div>
+    <a href="#rules"    data-toc="rules">Add project rules</a>
   </nav>
 
   <!-- Content -->
@@ -34,25 +53,32 @@
       <p class="lede">Use this SSE endpoint in every editor config below. Anyone with the URL + a valid auth token can connect.</p>
       <div class="code-wrap">
         <pre class="code-block">{{ sse_url }}</pre>
-        <button class="code-copy">copy</button>
+        <button class="code-copy" type="button">copy</button>
       </div>
 
-      {% if auth_enabled %}
-        {% if auth_token %}
-        <div class="callout" style="border-color:var(--green,#22c55e)">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px;color:var(--green,#22c55e)"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-          <div>Your token is <strong>pre-filled</strong> in the config snippets below. Treat it like a password — don't share it or commit it to source control. You can manage your tokens in <a href="/dashboard/tokens"><strong>Tokens</strong></a>.</div>
+      {% if needs_token %}
+      <div class="callout-amber">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><path d="m10.29 3.86-8.66 15A1 1 0 0 0 2.5 20.5h19a1 1 0 0 0 .87-1.5l-8.66-15a1 1 0 0 0-1.74 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <div>
+          This server requires authentication.
+          <form class="token-mint-form" method="post" action="/dashboard/tokens/generate">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <input type="hidden" name="next" value="/dashboard/setup">
+            <input type="hidden" name="expires_in_days" value="0">
+            <button type="submit">Generate a token →</button>
+          </form>
+          The snippets below will then be pre-filled automatically. You can also manage tokens on the <a href="/dashboard/tokens"><strong>Tokens</strong></a> page.
         </div>
-        {% else %}
-        <div class="callout" style="border-color:#f59e0b;background:rgba(245,158,11,.04)">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px;color:#d97706"><path d="m10.29 3.86-8.66 15A1 1 0 0 0 2.5 20.5h19a1 1 0 0 0 .87-1.5l-8.66-15a1 1 0 0 0-1.74 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <div>This server requires authentication. <a href="/dashboard/tokens"><strong>Generate a token →</strong></a> then return here — the snippets will be pre-filled automatically.</div>
-        </div>
-        {% endif %}
+      </div>
+      {% elif auth_enabled and auth_token %}
+      <div class="callout-success">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <div>Your token is <strong>pre-filled</strong> in the snippets below. Treat it like a password — don't share it or commit it to source control. Manage it on the <a href="/dashboard/tokens"><strong>Tokens</strong></a> page.</div>
+      </div>
       {% else %}
       <div class="callout">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-        <div>If your server requires authentication, generate a personal token from <strong>Settings → Tokens</strong>. Tokens are scoped per user so usage attributes correctly in this dashboard.</div>
+        <div>Auth is currently <strong>disabled</strong> on this server. Anyone with the URL can connect.</div>
       </div>
       {% endif %}
     </section>
@@ -60,82 +86,64 @@
     <!-- Connect an editor -->
     <section class="doc-section" id="editors">
       <h2>Connect an editor</h2>
-      <p class="lede">Pick your editor below. After connecting, restart the editor and trigger a tool call — your username will appear under <a href="/dashboard/">Users</a>.</p>
+      <p class="lede">Pick your editor below. After connecting, restart it and trigger any tool call — the status pill at the top of this page will flip to <span class="badge green"><span class="badge-dot"></span>connected</span>.</p>
 
-      <div class="tab-row" id="editor-tabs">
-        <div class="tab active" data-tab="claude">
-          <span style="width:14px;height:14px;border-radius:4px;background:linear-gradient(135deg,#D97757,#A85740);display:inline-block;flex-shrink:0"></span>
+      <div class="tab-row" id="editor-tabs" role="tablist" aria-label="Editor configuration">
+        <div class="tab active" data-tab="claude" role="tab" id="editor-tab-claude" aria-controls="tab-claude" aria-selected="true" tabindex="0">
+          <span class="editor-logo editor-logo--claude" aria-hidden="true"></span>
           Claude Code
         </div>
-        <div class="tab" data-tab="cursor">
-          <span style="width:14px;height:14px;border-radius:4px;background:#000;display:inline-block;flex-shrink:0"></span>
+        <div class="tab" data-tab="cursor" role="tab" id="editor-tab-cursor" aria-controls="tab-cursor" aria-selected="false" tabindex="-1">
+          <span class="editor-logo editor-logo--cursor" aria-hidden="true"></span>
           Cursor
         </div>
-        <div class="tab" data-tab="windsurf">
-          <span style="width:14px;height:14px;border-radius:4px;background:linear-gradient(135deg,#41E0CF,#0EA5A5);display:inline-block;flex-shrink:0"></span>
+        <div class="tab" data-tab="windsurf" role="tab" id="editor-tab-windsurf" aria-controls="tab-windsurf" aria-selected="false" tabindex="-1">
+          <span class="editor-logo editor-logo--windsurf" aria-hidden="true"></span>
           Windsurf
         </div>
       </div>
 
       <!-- Claude Code -->
-      <div class="tab-panel" id="tab-claude">
-        <h3>1. Add the server</h3>
+      <div class="tab-panel" id="tab-claude" role="tabpanel" aria-labelledby="editor-tab-claude">
+        <h3>1. Add the server (one line)</h3>
         <p>Run once in your terminal — this writes to your user-level Claude Code config:</p>
         <div class="code-wrap">
-          <pre class="code-block">claude mcp add {{ server_label }} --transport sse {{ sse_url }}</pre>
-          <button class="code-copy">copy</button>
+{% if auth_enabled %}<pre class="code-block">claude mcp add {{ server_label }} --transport sse --header "Authorization: Bearer {{ token_val }}" {{ sse_url }}</pre>{% else %}<pre class="code-block">claude mcp add {{ server_label }} --transport sse {{ sse_url }}</pre>{% endif %}
+          <button class="code-copy" type="button">copy</button>
         </div>
+        <p style="font-size:.8125rem;color:var(--text-muted);margin-top:-4px">Use this single-line form. Multi-line versions with trailing <code>\</code> often fail with <code>missing required argument 'commandOrUrl'</code> when a stray space sneaks in after the backslash.</p>
 
-        <h3>2. With authentication</h3>
-        <p>If the server requires a token, pass it as a header:</p>
+        <h3>2. Or: add via JSON (recommended when using headers)</h3>
+        <p>The <code>add-json</code> form passes the whole config as one argument and avoids any flag-parsing surprises:</p>
         <div class="code-wrap">
-          <pre class="code-block">claude mcp add {{ server_label }} --transport sse \
-  --header "Authorization: Bearer {{ token_val }}" \
-  {{ sse_url }}</pre>
-          <button class="code-copy">copy</button>
+{% if auth_enabled %}<pre class="code-block">claude mcp add-json {{ server_label }} '{"type":"sse","url":"{{ sse_url }}","headers":{"Authorization":"Bearer {{ token_val }}"}}'</pre>{% else %}<pre class="code-block">claude mcp add-json {{ server_label }} '{"type":"sse","url":"{{ sse_url }}"}'</pre>{% endif %}
+          <button class="code-copy" type="button">copy</button>
         </div>
-        {% if auth_enabled and auth_token %}
-        <p style="font-size:.8125rem;color:var(--text-muted,#6b7280);margin-top:.5rem">Token pre-filled from your account.</p>
-        {% elif auth_enabled and not auth_token %}
-        <p style="font-size:.8125rem;margin-top:.5rem"><a href="/dashboard/tokens">Generate a token →</a> to get the pre-filled command.</p>
-        {% endif %}
+        <p style="font-size:.8125rem;color:var(--text-muted);margin-top:-4px">The JSON must be wrapped in single quotes so the shell doesn't interpret the inner double quotes.</p>
 
         <h3>3. Project-scoped install (optional)</h3>
         <p>To make the server available only inside one repository, run the same command from inside the repo with <code>--scope project</code>:</p>
         <div class="code-wrap">
-          <pre class="code-block">cd ~/code/my-app
-claude mcp add {{ server_label }} --transport sse --scope project \
-  --header "Authorization: Bearer {{ token_val }}" \
-  {{ sse_url }}</pre>
-          <button class="code-copy">copy</button>
+{% if auth_enabled %}<pre class="code-block">cd ~/code/my-app
+claude mcp add-json {{ server_label }} --scope project '{"type":"sse","url":"{{ sse_url }}","headers":{"Authorization":"Bearer {{ token_val }}"}}'</pre>{% else %}<pre class="code-block">cd ~/code/my-app
+claude mcp add-json {{ server_label }} --scope project '{"type":"sse","url":"{{ sse_url }}"}'</pre>{% endif %}
+          <button class="code-copy" type="button">copy</button>
         </div>
 
         <h3>4. Verify</h3>
         <p>List MCP servers to confirm it registered:</p>
         <div class="code-wrap">
           <pre class="code-block">claude mcp list</pre>
-          <button class="code-copy">copy</button>
+          <button class="code-copy" type="button">copy</button>
         </div>
       </div>
 
       <!-- Cursor -->
-      <div class="tab-panel hidden" id="tab-cursor">
+      <div class="tab-panel hidden" id="tab-cursor" role="tabpanel" aria-labelledby="editor-tab-cursor" hidden>
         <h3>1. Edit your MCP config</h3>
         <p>Open <code>~/.cursor/mcp.json</code> (create it if missing) and add:</p>
         <div class="code-wrap">
-          <pre class="code-block">{
-  "mcpServers": {
-    "{{ server_label }}": {
-      "url": "{{ sse_url }}"
-    }
-  }
-}</pre>
-          <button class="code-copy">copy</button>
-        </div>
-
-        <h3>2. With authentication</h3>
-        <div class="code-wrap">
-          <pre class="code-block">{
+{% if auth_enabled %}<pre class="code-block">{
   "mcpServers": {
     "{{ server_label }}": {
       "url": "{{ sse_url }}",
@@ -144,58 +152,59 @@ claude mcp add {{ server_label }} --transport sse --scope project \
       }
     }
   }
-}</pre>
-          <button class="code-copy">copy</button>
+}</pre>{% else %}<pre class="code-block">{
+  "mcpServers": {
+    "{{ server_label }}": {
+      "url": "{{ sse_url }}"
+    }
+  }
+}</pre>{% endif %}
+          <button class="code-copy" type="button">copy</button>
         </div>
-        {% if auth_enabled and auth_token %}
-        <p style="font-size:.8125rem;color:var(--text-muted,#6b7280);margin-top:.5rem">Token pre-filled from your account.</p>
-        {% elif auth_enabled and not auth_token %}
-        <p style="font-size:.8125rem;margin-top:.5rem"><a href="/dashboard/tokens">Generate a token →</a> to get the pre-filled config.</p>
-        {% endif %}
 
-        <h3>3. Project-scoped install</h3>
+        <h3>2. Project-scoped install</h3>
         <p>For per-project config, create <code>.cursor/mcp.json</code> at your repo root with the same structure. Cursor merges project + user configs at runtime.</p>
 
-        <h3>4. Restart Cursor</h3>
+        <h3>3. Restart Cursor</h3>
         <p>Fully quit and reopen Cursor (don't just reload the window). Open the MCP panel in settings to see the server's status indicator turn green.</p>
       </div>
 
       <!-- Windsurf -->
-      <div class="tab-panel hidden" id="tab-windsurf">
+      <div class="tab-panel hidden" id="tab-windsurf" role="tabpanel" aria-labelledby="editor-tab-windsurf" hidden>
         <h3>1. Edit your MCP config</h3>
         <p>Open <code>~/.codeium/windsurf/mcp_config.json</code> and add:</p>
         <div class="code-wrap">
-          <pre class="code-block">{
-  "mcpServers": {
-    "{{ server_label }}": {
-      "serverUrl": "{{ sse_url }}"
-    }
-  }
-}</pre>
-          <button class="code-copy">copy</button>
-        </div>
-
-        <h3>2. With authentication</h3>
-        <div class="code-wrap">
-          <pre class="code-block">{
+{% if auth_enabled %}<pre class="code-block">{
   "mcpServers": {
     "{{ server_label }}": {
       "serverUrl": "{{ sse_url }}",
       "headers": { "Authorization": "Bearer {{ token_val }}" }
     }
   }
-}</pre>
-          <button class="code-copy">copy</button>
+}</pre>{% else %}<pre class="code-block">{
+  "mcpServers": {
+    "{{ server_label }}": {
+      "serverUrl": "{{ sse_url }}"
+    }
+  }
+}</pre>{% endif %}
+          <button class="code-copy" type="button">copy</button>
         </div>
-        {% if auth_enabled and auth_token %}
-        <p style="font-size:.8125rem;color:var(--text-muted,#6b7280);margin-top:.5rem">Token pre-filled from your account.</p>
-        {% elif auth_enabled and not auth_token %}
-        <p style="font-size:.8125rem;margin-top:.5rem"><a href="/dashboard/tokens">Generate a token →</a> to get the pre-filled config.</p>
-        {% endif %}
 
-        <h3>3. Restart</h3>
+        <h3>2. Restart</h3>
         <p>Restart Windsurf, then open Cascade and confirm the server appears in the MCP server list.</p>
       </div>
+    </section>
+
+    <!-- Verify -->
+    <section class="doc-section" id="verify">
+      <h2>Verify it works</h2>
+      <ol class="checklist">
+        <li>Restart your editor after adding the MCP server.</li>
+        <li>Ask your AI: <em>"list available projects"</em> — you should see the project names returned from this server.</li>
+        <li>Ask your AI: <em>"search rules for error handling"</em> — you should see relevant rule doc results inlined.</li>
+        <li>Watch the pill at the top of this page — it flips to <span class="badge green"><span class="badge-dot"></span>connected</span> within a few seconds of your first call.</li>
+      </ol>
     </section>
 
     <!-- Add project rules -->
@@ -203,8 +212,13 @@ claude mcp add {{ server_label }} --transport sse --scope project \
       <h2>Add project rules</h2>
       <p class="lede">Rules, architecture docs, and skills are markdown files indexed for search. Anyone on your team can add them — here's how.</p>
 
+      <div class="callout">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <div>Before writing a new doc, check what's already there: <a href="/dashboard/searches"><strong>Browse existing rules →</strong></a></div>
+      </div>
+
       <h3>1. Choose a namespace</h3>
-      <p>Drop your file under one of three folders in the <code>rules-repo</code>:</p>
+      <p>Drop your file under one of three folders in the rules repo:</p>
       <ul>
         <li><code>rules/</code> — coding standards, conventions, "do this not that" guidance</li>
         <li><code>arch/</code> — architecture overviews, system designs, ADRs</li>
@@ -229,7 +243,7 @@ When a request fails, return a JSON envelope:
 ```
 
 ...</pre>
-        <button class="code-copy">copy</button>
+        <button class="code-copy" type="button">copy</button>
       </div>
 
       <h3>3. Open a PR</h3>
@@ -248,17 +262,6 @@ When a request fails, return a JSON envelope:
       <p>Use the <code>projects:</code> frontmatter array to scope a doc. Calls from <code>list_projects → search_rules(project=…)</code> will return scoped results first.</p>
     </section>
 
-    <!-- Verify -->
-    <section class="doc-section" id="verify">
-      <h2>Verify it works</h2>
-      <ol class="checklist">
-        <li>Restart your editor after adding the MCP server.</li>
-        <li>Ask your AI: <em>"list available projects"</em> — you should see the project names returned from this server.</li>
-        <li>Ask your AI: <em>"search rules for error handling"</em> — you should see relevant rule doc results inlined.</li>
-        <li>Open the <a href="/dashboard/">Users page</a> — your username should appear with an <span class="badge green"><span class="badge-dot"></span>active</span> badge after your first call.</li>
-      </ol>
-    </section>
-
   </div><!-- /content -->
 </div><!-- /setup-layout -->
 
@@ -266,16 +269,51 @@ When a request fails, return a JSON envelope:
 
 {% block page_script %}
 <script>
-/* Editor tabs */
-initTabs('#editor-tabs', 'tab-');
+/* Editor tabs — accessible (click + arrow keys) */
+(function () {
+  var row = document.getElementById('editor-tabs');
+  if (!row) return;
+  var tabs = Array.prototype.slice.call(row.querySelectorAll('.tab'));
+  var panels = {};
+  tabs.forEach(function (t) {
+    var id = t.dataset.tab;
+    panels[id] = document.getElementById('tab-' + id);
+  });
+
+  function activate(tab) {
+    tabs.forEach(function (t) {
+      var on = (t === tab);
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      var p = panels[t.dataset.tab];
+      if (p) {
+        p.classList.toggle('hidden', !on);
+        if (on) p.removeAttribute('hidden'); else p.setAttribute('hidden', '');
+      }
+    });
+    tab.focus();
+  }
+
+  tabs.forEach(function (tab, idx) {
+    tab.addEventListener('click', function () { activate(tab); });
+    tab.addEventListener('keydown', function (e) {
+      var next = null;
+      if (e.key === 'ArrowRight') next = tabs[(idx + 1) % tabs.length];
+      else if (e.key === 'ArrowLeft') next = tabs[(idx - 1 + tabs.length) % tabs.length];
+      else if (e.key === 'Home') next = tabs[0];
+      else if (e.key === 'End') next = tabs[tabs.length - 1];
+      if (next) { e.preventDefault(); activate(next); }
+    });
+  });
+})();
 
 /* TOC scrollspy */
 (function () {
-  var ids = ['server', 'editors', 'rules', 'verify'];
+  var ids = ['server', 'editors', 'verify', 'rules'];
   var links = document.querySelectorAll('#setup-toc a[data-toc]');
 
   function onScroll() {
-    var fromTop = (document.querySelector('.main') || window).scrollTop || window.scrollY;
     var best = ids[0];
     ids.forEach(function (id) {
       var el = document.getElementById(id);
@@ -289,6 +327,52 @@ initTabs('#editor-tabs', 'tab-');
   var main = document.querySelector('.main');
   if (main) main.addEventListener('scroll', onScroll);
   window.addEventListener('scroll', onScroll);
+})();
+
+/* Live verify pill — poll /dashboard/api/me/last-call every 5 s */
+(function () {
+  var pill = document.getElementById('connect-status');
+  if (!pill) return;
+  var label = pill.querySelector('.pill-label');
+  if (!label) return;
+
+  function fmtSince(iso) {
+    var t = Date.parse(iso);
+    if (isNaN(t)) return 'just now';
+    var s = Math.max(0, Math.round((Date.now() - t) / 1000));
+    if (s < 60) return s + 's ago';
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ago';
+    var h = Math.floor(m / 60);
+    if (h < 48) return h + 'h ago';
+    return Math.floor(h / 24) + 'd ago';
+  }
+
+  function render(iso) {
+    if (iso) {
+      pill.classList.add('is-active');
+      label.innerHTML = 'Connected — last call <span class="pill-rel">' + fmtSince(iso) + '</span>';
+      pill.dataset.lastCall = iso;
+    } else {
+      pill.classList.remove('is-active');
+      label.textContent = 'Waiting for first call…';
+    }
+  }
+
+  /* Refresh the relative time on the initial render too */
+  if (pill.dataset.lastCall) render(pill.dataset.lastCall);
+
+  function poll() {
+    fetch('/dashboard/api/me/last-call', { credentials: 'same-origin', cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) { if (data) render(data.last_call); })
+      .catch(function () { /* swallow */ });
+  }
+
+  setInterval(poll, 5000);
+  setInterval(function () {
+    if (pill.dataset.lastCall) render(pill.dataset.lastCall);
+  }, 30000);
 })();
 </script>
 {% endblock %}

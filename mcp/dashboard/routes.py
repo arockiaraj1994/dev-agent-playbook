@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, RedirectResponse, Response
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.routing import BaseRoute, Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
@@ -217,12 +217,18 @@ def build_dashboard_routes(
         base = str(request.base_url).rstrip("/")
         sse_url = f"{base}/sse"
         auth_token: str | None = None
+        last_call: str | None = None
         principal = scope_principal(request.scope)
         if auth_enabled and auth_store is not None and principal is not None and principal.user_id != "public":
             all_tokens = await auth_store.list_tokens(principal.user_id)
             active = [t for t in all_tokens if t["active"]]
             if active:
                 auth_token = active[0]["token"]
+        if principal is not None and principal.user_id != "public":
+            detail = await store.get_user(user_name=principal.user_name, inactive_days=inactive_days)
+            if detail is not None:
+                last_call = detail.last_seen
+        token_generated = bool(request.query_params.get("token_generated"))
         return templates.TemplateResponse(
             request, "setup.html", _ctx(
                 request,
@@ -230,8 +236,20 @@ def build_dashboard_routes(
                 page="setup",
                 auth_enabled=auth_enabled,
                 auth_token=auth_token,
+                last_call=last_call,
+                token_generated=token_generated,
             )
         )
+
+    async def setup_last_call_api(request: Request) -> Response:
+        principal = scope_principal(request.scope)
+        if principal is None or principal.user_id == "public":
+            return JSONResponse({"last_call": None, "user": None})
+        detail = await store.get_user(user_name=principal.user_name, inactive_days=inactive_days)
+        return JSONResponse({
+            "last_call": detail.last_seen if detail else None,
+            "user": principal.user_name,
+        })
 
     # -- MCP token management (all authenticated users) ----------------------
 
@@ -270,6 +288,9 @@ def build_dashboard_routes(
             except ValueError:
                 return RedirectResponse("/dashboard/tokens?error=1", status_code=303)
         await auth_store.create_token(principal.user_id, expires_in_days, token_type="mcp")
+        next_path = str(form.get("next", "")).strip()
+        if next_path == "/dashboard/setup":
+            return RedirectResponse("/dashboard/setup?token_generated=1", status_code=303)
         return RedirectResponse("/dashboard/tokens?generated=1", status_code=303)
 
     async def tokens_revoke(request: Request) -> Response:
@@ -344,6 +365,7 @@ def build_dashboard_routes(
         Route("/searches", endpoint=searches_view, methods=["GET"]),
         Route("/activity", endpoint=activity_view, methods=["GET"]),
         Route("/setup", endpoint=setup_view, methods=["GET"]),
+        Route("/api/me/last-call", endpoint=setup_last_call_api, methods=["GET"]),
         Route("/tokens", endpoint=tokens_view, methods=["GET"]),
         Route("/tokens/generate", endpoint=tokens_generate, methods=["POST"]),
         Route("/tokens/revoke", endpoint=tokens_revoke, methods=["POST"]),

@@ -979,3 +979,117 @@ h3 {
 
 /* Hidden rows (for JS filtering) */
 tr.hidden-row { display: none; }
+
+/* ============================================================ Setup page extras */
+
+.editor-logo {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.editor-logo--claude   { background: linear-gradient(135deg, #D97757, #A85740); }
+.editor-logo--cursor   { background: #000; }
+.editor-logo--windsurf { background: linear-gradient(135deg, #41E0CF, #0EA5A5); }
+
+.callout-success {
+  background: var(--green-50);
+  border: 1px solid var(--green-100);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--green-700);
+  display: flex;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.status-pill .pill-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--text-subtle);
+  flex-shrink: 0;
+}
+.status-pill.is-active {
+  border-color: var(--green-100);
+  background: var(--green-50);
+  color: var(--green-700);
+}
+.status-pill.is-active .pill-dot {
+  background: var(--green-500);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+  animation: pill-pulse 1.6s ease-in-out infinite;
+}
+@keyframes pill-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+.token-mint-form {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+}
+.token-mint-form button {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  font-weight: 600;
+}
+.token-mint-form button:hover { opacity: 0.85; }
+
+@media (max-width: 900px) {
+  .toc { display: none; }
+}
+
+/* No horizontal scroll on the setup page —
+   long code snippets get an internal scroll bar instead of pushing the page. */
+.setup-layout { min-width: 0; }
+.setup-layout > * { min-width: 0; }
+.doc-section,
+.tab-panel,
+.code-wrap,
+.callout,
+.callout-amber,
+.callout-success { min-width: 0; }
+.code-block {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.callout,
+.callout-amber,
+.callout-success { overflow-wrap: anywhere; word-break: break-word; }
+
+/* Page header should wrap cleanly; let the status pill drop to its own line on tight widths */
+.page-header { min-width: 0; }
+@media (max-width: 640px) {
+  .status-pill { white-space: normal; max-width: 100%; }
+  .page-header { flex-direction: column; align-items: flex-start; }
+}
+
+/* Tab row may exceed width if labels grow — allow wrapping rather than overflow */
+#editor-tabs { flex-wrap: wrap; }
+
+/* Belt-and-suspenders: never let the dashboard itself scroll horizontally */
+html, body { overflow-x: hidden; }
+.main { min-width: 0; }
+.content { min-width: 0; max-width: 100%; }
