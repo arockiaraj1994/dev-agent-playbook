@@ -106,7 +106,7 @@
         <h3>1. Add the server (one line)</h3>
         <p>Run once in your terminal — this writes to your user-level Claude Code config:</p>
         <div class="code-wrap">
-{% if auth_enabled %}<pre class="code-block">claude mcp add {{ server_label }} --transport sse --header "Authorization: Bearer {{ token_val }}" {{ sse_url }}</pre>{% else %}<pre class="code-block">claude mcp add {{ server_label }} --transport sse {{ sse_url }}</pre>{% endif %}
+{% if auth_enabled %}<pre class="code-block">claude mcp add --transport sse {{ server_label }} {{ sse_url }} --header "Authorization: Bearer {{ token_val }}"</pre>{% else %}<pre class="code-block">claude mcp add --transport sse {{ server_label }} {{ sse_url }}</pre>{% endif %}
           <button class="code-copy" type="button">copy</button>
         </div>
         <p style="font-size:.8125rem;color:var(--text-muted);margin-top:-4px">Use this single-line form. Multi-line versions with trailing <code>\</code> often fail with <code>missing required argument 'commandOrUrl'</code> when a stray space sneaks in after the backslash.</p>
@@ -134,6 +134,14 @@ claude mcp add-json {{ server_label }} --scope project '{"type":"sse","url":"{{ 
           <pre class="code-block">claude mcp list</pre>
           <button class="code-copy" type="button">copy</button>
         </div>
+
+        <h3>5. Remove</h3>
+        <p>To remove the server from Claude Code:</p>
+        <div class="code-wrap">
+          <pre class="code-block">claude mcp remove {{ server_label }}</pre>
+          <button class="code-copy" type="button">copy</button>
+        </div>
+        <p style="font-size:.8125rem;color:var(--text-muted);margin-top:-4px">For a project-scoped install, run the same command from inside the repo with <code>--scope project</code>.</p>
       </div>
 
       <!-- Cursor -->
