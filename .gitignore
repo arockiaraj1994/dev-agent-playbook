@@ -39,6 +39,3 @@ mcp/data/
 dist/
 build/
 
-# Private project rule docs (never check in)
-baton-sso-config/
-integration-manager/

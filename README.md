@@ -10,6 +10,11 @@ Common solutions like `AGENTS.md` or `DESIGN.md` work, but they require you to d
 
 **This project solves that with on-demand context delivery over MCP.** Instead of front-loading everything, your rule docs, architecture decisions, error conventions, patterns, and skills live on a central server. Every AI editor — regardless of vendor — connects to it and retrieves only the context relevant to the current task, via BM25 search and structured fetch tools. The server records every tool call so you can see exactly which rules are being used (and which gaps need filling).
 
+<div align="center">
+  <img src="docs/screenshots/dev_p_dashboard.png" alt="Dashboard" width="49%" style="border-radius:8px; border:2px solid #c8c8c8; box-shadow:0 8px 32px rgba(0,0,0,0.18);" />
+  <img src="docs/screenshots/dev_p_projects.png" alt="Projects" width="49%" style="border-radius:8px; border:2px solid #c8c8c8; box-shadow:0 8px 32px rgba(0,0,0,0.18);" />
+</div>
+
 ---
 
 ## Who is this for?
@@ -201,11 +206,64 @@ the bundle returns.
 
 `http://<host>:3000/dashboard/` — open this to monitor usage and manage the server.
 
+<div align="center">
+  <img src="docs/screenshots/dev_p_dashboard.png" alt="Dashboard — live KPIs, tool call chart, recent activity" width="100%" style="border-radius:8px; border:2px solid #c8c8c8; box-shadow:0 8px 32px rgba(0,0,0,0.18);" />
+  <sub>Dashboard — connected editors, calls today, zero-result rate, hourly activity</sub>
+</div>
+
+<br>
+
 - **Dashboard** — live KPIs: connected editors, calls today, zero-result rate, hourly activity.
+
+<div align="center">
+  <img src="docs/screenshots/dev_p_projects.png" alt="Projects — rule health per project" width="100%" style="border-radius:8px; border:2px solid #c8c8c8; box-shadow:0 8px 32px rgba(0,0,0,0.18);" />
+  <sub>Projects — health score per project, file-by-file validation status, hard vs soft failures</sub>
+</div>
+
+<br>
+
+- **Projects** — health of every rules project the server has loaded. Click a row for the file-by-file fix-it list.
+
+<div align="center">
+  <img src="docs/screenshots/dev_p_users.png" alt="Users — active, inactive, never-called status" width="100%" style="border-radius:8px; border:2px solid #c8c8c8; box-shadow:0 8px 32px rgba(0,0,0,0.18);" />
+  <sub>Users & adoption — who is actively using the server, who has gone quiet, who never connected</sub>
+</div>
+
+<br>
+
 - **Users** — who's connected, with `active` / `inactive` / `never-called` status.
+
+<div align="center">
+  <img src="docs/screenshots/dev_p_tools.png" alt="Tools — call counts, latency, most fetched docs" width="100%" style="border-radius:8px; border:2px solid #c8c8c8; box-shadow:0 8px 32px rgba(0,0,0,0.18);" />
+  <sub>Tools — call counts and latency per tool, plus which rule docs are fetched most</sub>
+</div>
+
+<br>
+
 - **Tools** — call counts, latency, error rate per tool, and which docs are fetched most.
+
+<div align="center">
+  <img src="docs/screenshots/dev_p_activity.png" alt="Activity — live feed of all tool calls" width="100%" style="border-radius:8px; border:2px solid #c8c8c8; box-shadow:0 8px 32px rgba(0,0,0,0.18);" />
+  <sub>Activity — every tool call, the exact args, which editor sent it, and whether it succeeded</sub>
+</div>
+
+<br>
+
 - **Searches** — recent queries + a **zero-result list** showing which topics have no docs yet.
 - **Activity** — live feed of all tool calls.
+
+<div align="center">
+  <img src="docs/screenshots/dev_p_tokens.png" alt="API Tokens — generate and manage bearer tokens" width="100%" style="border-radius:8px; border:2px solid #c8c8c8; box-shadow:0 8px 32px rgba(0,0,0,0.18);" />
+  <sub>Tokens — generate per-user Bearer tokens for MCP authentication</sub>
+</div>
+
+<div align="center" style="margin-top:16px;">
+  <img src="docs/screenshots/dev_p_token.png" alt="Manage Users — create accounts with user or admin roles" width="100%" style="border-radius:8px; border:2px solid #c8c8c8; box-shadow:0 8px 32px rgba(0,0,0,0.18);" />
+  <sub>Manage Users — create team accounts, assign User or Admin roles</sub>
+</div>
+
+<br>
+
 - **Setup** — editor connection instructions for Claude Code, Cursor, and Windsurf.
 
 ---
