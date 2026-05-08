@@ -45,6 +45,15 @@
 - **new use case** → `skills/add-usecase.md` — Playbook for adding a new use case in the domain layer.
 - **add business logic** → `skills/add-usecase.md` — Playbook for adding a new use case in the domain layer.
 - **new operation** → `skills/add-usecase.md` — Playbook for adding a new use case in the domain layer.
+- **release** → `skills/release.md` — Playbook for bumping the version, building a release bundle, and installing via ADB.
+- **publish** → `skills/release.md` — Playbook for bumping the version, building a release bundle, and installing via ADB.
+- **bump version** → `skills/release.md` — Playbook for bumping the version, building a release bundle, and installing via ADB.
+- **adb install** → `skills/release.md` — Playbook for bumping the version, building a release bundle, and installing via ADB.
+- **install apk** → `skills/release.md` — Playbook for bumping the version, building a release bundle, and installing via ADB.
+- **release bundle** → `skills/release.md` — Playbook for bumping the version, building a release bundle, and installing via ADB.
+- **play store** → `skills/release.md` — Playbook for bumping the version, building a release bundle, and installing via ADB.
+- **version code** → `skills/release.md` — Playbook for bumping the version, building a release bundle, and installing via ADB.
+- **version name** → `skills/release.md` — Playbook for bumping the version, building a release bundle, and installing via ADB.
 
 ## Patterns
 
