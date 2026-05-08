@@ -80,7 +80,7 @@ def main(argv: list[str] | None = None) -> int:
         _banner("Validating rule corpus…")
         rc = _run_validator("--check")
         if rc != 0:
-            _fail(f"Validation failed (exit {rc}). Server not started.")
+            _fail("Server not started — fix the errors above and re-run.")
             return rc
         _ok("Validation passed")
     else:

@@ -29,7 +29,21 @@ import argparse
 import os
 import re
 import sys
+from collections import defaultdict
 from pathlib import Path
+
+
+# ANSI helpers (disabled when not a TTY)
+def _c(code: str, text: str) -> str:
+    if not sys.stderr.isatty():
+        return text
+    return f"\033[{code}m{text}\033[0m"
+
+
+def _red(t: str) -> str: return _c("31", t)
+def _yellow(t: str) -> str: return _c("33", t)
+def _bold(t: str) -> str: return _c("1", t)
+def _dim(t: str) -> str: return _c("2", t)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MCP_DIR = REPO_ROOT / "mcp"
@@ -43,7 +57,7 @@ from loader import (  # noqa: E402
 )
 from index_render import render_index  # noqa: E402
 
-EXCLUDED_DIRS = {"mcp", ".git", ".github", "scripts", ".venv"}
+EXCLUDED_DIRS = {"mcp", "docs", ".git", ".github", "scripts", ".venv"}
 
 LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 
@@ -76,13 +90,35 @@ def _project_dirs(repo_root: Path) -> list[Path]:
 # ---------------------------------------------------------------------------
 
 
-def _check_required_files(projects: list[Path]) -> list[str]:
-    errors: list[str] = []
+_FIX_HINTS: dict[str, str] = {
+    "missing required file": "create the file (see playbook docs for required content)",
+    "expected at least one languages": "add languages/<lang>/standards.md for each stack",
+    "missing workflows": "add a workflow doc under workflows/<name>.md",
+    "not executable": "run: chmod +x <file>",
+    "broken link": "update the link target so it points to an existing file",
+    "does not match the expected layout": "rename or move the file to match the playbook layout",
+    "starts with '---' but no closing": "add a closing '---' line after the YAML frontmatter",
+    "out of date": "run: python scripts/validate-rules.py --regen-index",
+}
+
+
+def _hint(msg: str) -> str:
+    for key, hint in _FIX_HINTS.items():
+        if key in msg:
+            return hint
+    return ""
+
+
+# (project, category, message) tuples — richer than bare strings
+_Error = tuple[str, str, str]   # (project, category, detail)
+
+
+def _check_required_files(projects: list[Path]) -> list[_Error]:
+    errors: list[_Error] = []
     for project in projects:
         for rel in REQUIRED_FILES:
             if not (project / rel).is_file():
-                errors.append(f"{project.name}: missing required file {rel}")
-        # At least one language standards doc.
+                errors.append((project.name, "required files", f"missing required file {rel}"))
         langs_dir = project / "languages"
         has_standards = False
         if langs_dir.is_dir():
@@ -91,51 +127,55 @@ def _check_required_files(projects: list[Path]) -> list[str]:
                     has_standards = True
                     break
         if not has_standards:
-            errors.append(
-                f"{project.name}: expected at least one languages/<lang>/standards.md"
-            )
-        # All four workflows.
+            errors.append((
+                project.name, "required files",
+                "expected at least one languages/<lang>/standards.md",
+            ))
         for wf in REQUIRED_WORKFLOWS:
             if not (project / "workflows" / f"{wf}.md").is_file():
-                errors.append(f"{project.name}: missing workflows/{wf}.md")
-        # Gate scripts executable.
+                errors.append((project.name, "workflows", f"missing workflows/{wf}.md"))
         scripts_dir = project / "gates" / "scripts"
         if scripts_dir.is_dir():
             for s in scripts_dir.iterdir():
                 if s.is_file() and s.suffix == ".sh" and not os.access(s, os.X_OK):
-                    errors.append(
-                        f"{project.name}: gates/scripts/{s.name} is not executable "
-                        "(chmod +x)"
-                    )
+                    errors.append((
+                        project.name, "gate scripts",
+                        f"gates/scripts/{s.name} is not executable (chmod +x)",
+                    ))
     return errors
 
 
-def _check_frontmatter(repo_root: Path) -> list[str]:
-    errors: list[str] = []
+def _check_frontmatter(repo_root: Path) -> list[_Error]:
+    errors: list[_Error] = []
     for md in repo_root.rglob("*.md"):
         rel = md.relative_to(repo_root)
         if rel.parts[0] in EXCLUDED_DIRS:
             continue
         if len(rel.parts) < 2:
             continue
+        project = rel.parts[0]
         try:
             content = md.read_text(encoding="utf-8")
         except OSError as e:
-            errors.append(f"{rel}: cannot read ({e})")
+            errors.append((project, "frontmatter", f"{rel}: cannot read ({e})"))
             continue
         if content.startswith("---"):
             metadata, _ = _parse_frontmatter(content)
             if not metadata and "---" not in content[3:]:
-                errors.append(f"{rel}: starts with '---' but no closing '---' boundary")
+                errors.append((
+                    project, "frontmatter",
+                    f"{rel}: starts with '---' but no closing '---' boundary",
+                ))
     return errors
 
 
-def _check_links(repo_root: Path) -> list[str]:
-    errors: list[str] = []
+def _check_links(repo_root: Path) -> list[_Error]:
+    errors: list[_Error] = []
     for md in repo_root.rglob("*.md"):
         rel = md.relative_to(repo_root)
         if rel.parts[0] in EXCLUDED_DIRS:
             continue
+        project = rel.parts[0]
         try:
             content = md.read_text(encoding="utf-8")
         except OSError:
@@ -151,13 +191,13 @@ def _check_links(repo_root: Path) -> list[str]:
                 continue
             resolved = (md.parent / path_part).resolve()
             if not resolved.exists():
-                errors.append(f"{rel}: broken link -> {target}")
+                errors.append((project, "broken links", f"{rel}: broken link -> {target}"))
     return errors
 
 
-def _check_no_other_doc_types(docs: list[RuleDoc]) -> list[str]:
+def _check_no_other_doc_types(docs: list[RuleDoc]) -> list[_Error]:
     return [
-        f"{d.project}/{d.relative_path}: does not match the expected layout"
+        (d.project, "layout", f"{d.project}/{d.relative_path}: does not match the expected layout")
         for d in docs
         if d.doc_type == "other"
     ]
@@ -170,9 +210,9 @@ def _check_no_other_doc_types(docs: list[RuleDoc]) -> list[str]:
 
 def _regen_index(
     projects: list[Path], all_docs: list[RuleDoc], *, check_only: bool = False
-) -> list[str]:
+) -> list[_Error]:
     """Write INDEX.md (or, in check mode, return diff errors)."""
-    errors: list[str] = []
+    errors: list[_Error] = []
     by_project: dict[str, list[RuleDoc]] = {}
     for d in all_docs:
         if d.doc_type == "other":
@@ -187,10 +227,11 @@ def _regen_index(
         if check_only:
             existing = target.read_text(encoding="utf-8") if target.is_file() else ""
             if existing != rendered:
-                errors.append(
+                errors.append((
+                    p.name, "index",
                     f"{p.name}/INDEX.md is out of date — run "
-                    "`python scripts/validate-rules.py --regen-index`."
-                )
+                    "`python scripts/validate-rules.py --regen-index`.",
+                ))
         else:
             target.write_text(rendered, encoding="utf-8")
     return errors
@@ -244,12 +285,39 @@ def main(argv: list[str] | None = None) -> int:
         errors += _regen_index(projects, docs, check_only=True)
 
     if errors:
-        print(f"\nFAILED: {len(errors)} error(s):", file=sys.stderr)
-        for e in errors:
-            print(f"  - {e}", file=sys.stderr)
+        _print_errors(errors)
         return 1
     print("OK")
     return 0
+
+
+def _print_errors(errors: list[_Error]) -> None:
+    total = len(errors)
+    print(
+        f"\n{_bold(_red('FAILED:'))} {_bold(str(total))} error(s) across "
+        f"{len({e[0] for e in errors})} project(s):\n",
+        file=sys.stderr,
+    )
+
+    by_project: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
+    for project, category, msg in errors:
+        by_project[project][category].append(msg)
+
+    for project, categories in sorted(by_project.items()):
+        proj_count = sum(len(v) for v in categories.values())
+        print(
+            f"  {_bold(_yellow(project))}  "
+            f"{_dim(f'({proj_count} error(s))')}",
+            file=sys.stderr,
+        )
+        for category, msgs in sorted(categories.items()):
+            print(f"    {_bold(category)}", file=sys.stderr)
+            for msg in msgs:
+                hint = _hint(msg)
+                print(f"      {_red('✗')} {msg}", file=sys.stderr)
+                if hint:
+                    print(f"        {_dim('→ ' + hint)}", file=sys.stderr)
+        print(file=sys.stderr)
 
 
 if __name__ == "__main__":
