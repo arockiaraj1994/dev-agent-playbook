@@ -1,8 +1,11 @@
 # Templates
 
-Copy-pasteable starting points for the doc types in the per-project layout.
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for naming, the pattern-vs-skill rule,
-and the H1 convention.
+Copy-pasteable starting points for the doc types in the per-project layout
+under `standards/<project>/`. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for
+naming, the pattern-vs-skill rule, and the H1 convention.
+
+For PRDs and stories, use `mcp/templates/PRD.md` and `mcp/templates/STORY.md`
+(or call `start_requirement`) and place them under `requirements/<project>/`.
 
 The YAML frontmatter block is optional except where noted (workflows and
 skills should set `triggers:` and `see_also:` so `start_task` and
@@ -10,12 +13,12 @@ skills should set `triggers:` and `see_also:` so `start_task` and
 
 Two conventions in `AGENTS.md` are load-bearing, not decorative:
 
-- **`see_also: [tool:start_task, …]`** — without it the doc renders no
+- **`see_also: [tool:start_task, …]`** - without it the doc renders no
   `## Next Calls` block, so an agent that opens `AGENTS.md` first has nowhere
   to chain to and simply stops. This is the single most common authoring
   mistake.
-- **A `## IDENTITY` H2** — `start_task` lifts exactly this section into its
-  bundle. Anything outside it is only reachable via `get_agents_md`.
+- **A `## IDENTITY` H2** - `start_task` lifts exactly this section into its
+  bundle. Anything outside it is only reachable via `get_doc(kind="agents")`.
 
 ---
 
@@ -23,13 +26,13 @@ Two conventions in `AGENTS.md` are load-bearing, not decorative:
 
 ```markdown
 ---
-title: AGENTS.md — <Project>
+title: AGENTS.md - <Project>
 description: Identity and behavior for AI agents working on <project>.
 tags: [<stack>, <lang>]
 see_also: [tool:start_task, tool:get_guardrails, workflow:new-feature, workflow:bug-fix]
 ---
 
-# AGENTS.md — <Project> (<short stack>)
+# AGENTS.md - <Project> (<short stack>)
 
 **Stack:** <one-line stack summary>
 
@@ -37,7 +40,7 @@ see_also: [tool:start_task, tool:get_guardrails, workflow:new-feature, workflow:
 
 ## IDENTITY
 
-You are a senior engineer working on **<project>** — <one-paragraph description
+You are a senior engineer working on **<project>** - <one-paragraph description
 of what the codebase does and what "good" looks like>.
 
 You write minimal, correct, production-ready code.
@@ -71,12 +74,12 @@ You fix root causes, not symptoms.
 
 ```markdown
 ---
-title: Guardrails — <Project>
+title: Guardrails - <Project>
 description: Always-on MUST / MUST NOT rules.
 tags: [guardrails, security]
 ---
 
-# Guardrails — <Project>
+# Guardrails - <Project>
 
 ## MUST
 - Scope: one task = one change.
@@ -98,11 +101,11 @@ Run `bash gates/scripts/verify-<lang>.sh` before claiming done.
 
 ```markdown
 ---
-title: Definition of Done — <Project>
+title: Definition of Done - <Project>
 description: Tests + lint + security gates that must pass.
 ---
 
-# Definition of Done — <Project>
+# Definition of Done - <Project>
 
 ## Mechanical (run via `gates/scripts/verify-<lang>.sh`)
 - [ ] <build step>
@@ -122,7 +125,7 @@ description: Tests + lint + security gates that must pass.
 ## `architecture/overview.md`
 
 ```markdown
-# Architecture — <Project>
+# Architecture - <Project>
 
 ## System overview
 <paragraph>
@@ -145,12 +148,12 @@ See `architecture/decisions/` for ADRs.
 
 ```markdown
 ---
-title: <Language> standards — <Project>
+title: <Language> standards - <Project>
 description: Coding standards for <lang> in <project>.
 language: <lang>
 ---
 
-# <Language> standards — <Project>
+# <Language> standards - <Project>
 
 ## Language baseline
 - ...
@@ -168,13 +171,13 @@ language: <lang>
 
 ```markdown
 ---
-title: <Name> pattern — <Project>
+title: <Name> pattern - <Project>
 description: <one-sentence summary>.
 tags: [<stack>, <feature>]
 see_also: [skill:<related-skill>]
 ---
 
-# Pattern: <Name> — <project context>
+# Pattern: <Name> - <project context>
 
 **Use this when:** <one-line trigger>.
 
@@ -197,17 +200,17 @@ see_also: [skill:<related-skill>]
 
 ```markdown
 ---
-title: <Action> — <Project>
+title: <Action> - <Project>
 description: <one-sentence summary>.
 triggers: [<phrase>, <phrase>]
 see_also: [pattern:<name>, language:<lang>/standards]
 ---
 
-# Skill: <Action> — <when to use>
+# Skill: <Action> - <when to use>
 
 ## Steps
-1. **<Step>** — <what to do>.
-2. **<Step>** — <verification>.
+1. **<Step>** - <what to do>.
+2. **<Step>** - <verification>.
 
 ## Constraints
 - <non-obvious constraint>.
@@ -219,14 +222,14 @@ see_also: [pattern:<name>, language:<lang>/standards]
 
 ```markdown
 ---
-title: Workflow — <Name>
+title: Workflow - <Name>
 description: <one-sentence summary>.
 triggers: [<phrase>, <phrase>]
 gates: [verify-<lang>]
 see_also: [skill:<x>, pattern:<y>, language:<lang>/standards]
 ---
 
-# Workflow — <Name>
+# Workflow - <Name>
 
 ## Steps
 1. ...
@@ -242,11 +245,11 @@ see_also: [skill:<x>, pattern:<y>, language:<lang>/standards]
 
 ```markdown
 ---
-title: Gates — <Project>
+title: Gates - <Project>
 description: Executable verification scripts.
 ---
 
-# Gates — <Project>
+# Gates - <Project>
 
 ## verify-<lang>.sh
 

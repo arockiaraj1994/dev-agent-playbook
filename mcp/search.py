@@ -1,5 +1,5 @@
 """
-search.py — BM25 full-text search over loaded RuleDocs.
+search.py - BM25 full-text search over loaded RuleDocs.
             Headings (H1/H2/H3) and frontmatter title/tags are weighted 2× in
             the index. Snippets are annotated with the parent markdown heading
             they appear under.
@@ -59,6 +59,12 @@ class SearchResult:
     score: float
     snippet: str  # Best matching excerpt
     heading: str | None  # Nearest preceding markdown heading (for context)
+    corpus: str = "standards"
+
+
+# Requirements are down-weighted in mixed (corpus="all") searches so curated
+# standards outrank a stale draft PRD on the same keywords.
+_REQUIREMENTS_SCORE_MULTIPLIER = 0.7
 
 
 # ---------------------------------------------------------------------------
@@ -177,11 +183,19 @@ class RulesSearchEngine:
         self._index = self._build_index(self._docs) if self._docs else None
         logger.info("BM25 index built over %d documents.", len(self._docs))
 
+    def rebuild(self, store: RulesStore) -> None:
+        """Rebuild the index after a corpus reload (atomic swap upstream)."""
+        self._docs = store.all_docs()
+        self._index = self._build_index(self._docs) if self._docs else None
+        logger.info("BM25 index rebuilt over %d documents.", len(self._docs))
+
     def _build_index(self, docs: list[RuleDoc]) -> BM25Okapi:
         corpus: list[list[str]] = []
         for doc in docs:
             # Path / type tokens: identify the doc.
-            path_tokens = _tokenize(doc.relative_path + " " + doc.project + " " + doc.doc_type)
+            path_tokens = _tokenize(
+                doc.relative_path + " " + doc.project + " " + doc.doc_type + " " + doc.corpus
+            )
             content_tokens = _tokenize(doc.content)
 
             # Boosted tokens: headings + frontmatter title/tags weighted 2×.
@@ -205,15 +219,20 @@ class RulesSearchEngine:
         project: str | None = None,
         doc_type: str | None = None,
         top_k: int = DEFAULT_TOP_K,
+        corpus: str | None = "standards",
     ) -> list[SearchResult]:
         """
-        BM25 search over all docs.
+        BM25 search over docs.
+
+        Filters (project / doc_type / corpus) are applied BEFORE truncating at
+        top_k, so a filtered search never under-returns.
 
         Args:
             query:    Natural language or keyword query.
-            project:  Optional — filter results to a single project.
-            doc_type: Optional — filter by type (pattern, agents, error-conventions, etc.)
+            project:  Optional - filter results to a single project.
+            doc_type: Optional - filter by type (pattern, agents, prd, story, ...).
             top_k:    Max results to return.
+            corpus:   "standards" (default), "requirements", "all", or None (=all).
 
         Returns:
             Ranked list of SearchResult, best match first.
@@ -227,24 +246,28 @@ class RulesSearchEngine:
 
         scores = self._index.get_scores(query_tokens)
 
-        ranked = sorted(
-            zip(self._docs, scores, strict=True),
-            key=lambda x: x[1],
-            reverse=True,
-        )
-
-        results: list[SearchResult] = []
-
-        for doc, score in ranked:
+        # Pre-filter candidate set, then rank - never truncate before filtering.
+        candidates: list[tuple[RuleDoc, float]] = []
+        mixed = corpus in (None, "all")
+        for doc, score in zip(self._docs, scores, strict=True):
             if score == 0.0:
                 continue
             if project and doc.project != project:
                 continue
             if doc_type and doc.doc_type != doc_type:
                 continue
+            if corpus not in (None, "all") and doc.corpus != corpus:
+                continue
+            adj = float(score)
+            if mixed and doc.corpus == "requirements":
+                adj *= _REQUIREMENTS_SCORE_MULTIPLIER
+            candidates.append((doc, adj))
 
+        candidates.sort(key=lambda x: x[1], reverse=True)
+
+        results: list[SearchResult] = []
+        for doc, score in candidates[:top_k]:
             snippet, heading = _extract_snippet(doc.content, query_tokens, self._snippet_window)
-
             results.append(
                 SearchResult(
                     project=doc.project,
@@ -253,11 +276,9 @@ class RulesSearchEngine:
                     score=round(score, 4),
                     snippet=snippet,
                     heading=heading,
+                    corpus=doc.corpus,
                 )
             )
-
-            if len(results) >= top_k:
-                break
 
         logger.debug("Search '%s' → %d results", query, len(results))
         return results

@@ -183,8 +183,8 @@ wheels = [
 ]
 
 [[package]]
-name = "dev-agent-playbook"
-version = "0.3.0"
+name = "dev-playbook"
+version = "0.6.0"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },

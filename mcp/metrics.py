@@ -1,5 +1,5 @@
 """
-metrics.py — SQLite-backed storage for MCP usage metrics.
+metrics.py - SQLite-backed storage for MCP usage metrics.
 
 Tracks two things:
 
@@ -59,13 +59,17 @@ _SCHEMA = (
         top_result_score REAL,
         latency_ms       INTEGER NOT NULL,
         status           TEXT NOT NULL,
-        created_at       TEXT NOT NULL
+        created_at       TEXT NOT NULL,
+        requirement_id   TEXT,
+        corpus           TEXT
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_calls_user ON calls(user_id, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_calls_tool ON calls(tool_name, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_calls_doc ON calls(doc_path, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_calls_created ON calls(created_at DESC)",
+    # idx_calls_req is created AFTER the requirement_id migration below - 
+    # it must not live in _SCHEMA or upgrades of pre-0.6 DBs fail here.
 )
 
 
@@ -149,10 +153,10 @@ class DashboardSummary:
     active: int
     inactive: int
     never_called: int
-    hourly: list[dict]       # 24 items: {h, ok, err, total}
-    daily: list[dict]        # 7 items:  {label, search, get, list}
-    live_users: list[dict]   # {user_name, editor, calls_24h, last_call}
-    top_tools: list[dict]    # {tool, calls, share}
+    hourly: list[dict]  # 24 items: {h, ok, err, total}
+    daily: list[dict]  # 7 items:  {label, search, get, list}
+    live_users: list[dict]  # {user_name, editor, calls_24h, last_call}
+    top_tools: list[dict]  # {tool, calls, share}
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +170,9 @@ def _now() -> str:
 
 
 def _iso_offset(*, days: int = 0, hours: int = 0, minutes: int = 0) -> str:
-    return (datetime.now(UTC) - timedelta(days=days, hours=hours, minutes=minutes)).isoformat(timespec="seconds")
+    return (datetime.now(UTC) - timedelta(days=days, hours=hours, minutes=minutes)).isoformat(
+        timespec="seconds"
+    )
 
 
 def _percentile(values: list[int], p: float) -> float:
@@ -221,6 +227,15 @@ class MetricsStore:
         with _connect(self._path) as conn:
             for stmt in _SCHEMA:
                 conn.execute(stmt)
+            # Migrate: add requirement_id / corpus if upgrading an older DB.
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(calls)").fetchall()}
+            if "requirement_id" not in cols:
+                conn.execute("ALTER TABLE calls ADD COLUMN requirement_id TEXT")
+            if "corpus" not in cols:
+                conn.execute("ALTER TABLE calls ADD COLUMN corpus TEXT")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_calls_req ON calls(requirement_id, created_at DESC)"
+            )
 
     # -- writers ------------------------------------------------------------
 
@@ -277,6 +292,8 @@ class MetricsStore:
         doc_path: str | None = None,
         top_result_path: str | None = None,
         top_result_score: float | None = None,
+        requirement_id: str | None = None,
+        corpus: str | None = None,
     ) -> None:
         await asyncio.to_thread(
             self._record_call_sync,
@@ -291,6 +308,8 @@ class MetricsStore:
             doc_path,
             top_result_path,
             top_result_score,
+            requirement_id,
+            corpus,
         )
 
     def _record_call_sync(
@@ -306,6 +325,8 @@ class MetricsStore:
         doc_path: str | None,
         top_result_path: str | None,
         top_result_score: float | None,
+        requirement_id: str | None,
+        corpus: str | None,
     ) -> None:
         with _connect(self._path) as conn:
             conn.execute(
@@ -313,8 +334,8 @@ class MetricsStore:
                 INSERT INTO calls (
                     user_id, user_name, editor_name, tool_name, args_summary,
                     query, doc_path, top_result_path, top_result_score,
-                    latency_ms, status, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    latency_ms, status, created_at, requirement_id, corpus
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     user_id,
@@ -329,6 +350,8 @@ class MetricsStore:
                     latency_ms,
                     status,
                     _now(),
+                    requirement_id,
+                    corpus,
                 ),
             )
 
@@ -495,13 +518,13 @@ class MetricsStore:
             for r in rows
         ]
 
-    async def dashboard_summary(self, *, inactive_days: int) -> "DashboardSummary":
+    async def dashboard_summary(self, *, inactive_days: int) -> DashboardSummary:
         return await asyncio.to_thread(self._dashboard_summary_sync, inactive_days)
 
-    def _dashboard_summary_sync(self, inactive_days: int) -> "DashboardSummary":
+    def _dashboard_summary_sync(self, inactive_days: int) -> DashboardSummary:
         cutoff_24h = _iso_offset(hours=24)
         cutoff_48h = _iso_offset(hours=48)
-        cutoff_7d  = _iso_offset(days=7)
+        cutoff_7d = _iso_offset(days=7)
         # "Connected" = initialized within the last 4 hours (SSE connections
         # are long-lived; initialize fires once when the editor connects).
         cutoff_connected = _iso_offset(hours=4)
@@ -520,7 +543,7 @@ class MetricsStore:
                 (cutoff_24h,),
             ).fetchone()
             calls_today: int = r["calls_today"] or 0
-            zero_today: int  = r["zero_today"] or 0
+            zero_today: int = r["zero_today"] or 0
 
             r2 = conn.execute(
                 """
@@ -535,7 +558,7 @@ class MetricsStore:
                 (cutoff_48h, cutoff_24h),
             ).fetchone()
             calls_yesterday: int = r2["calls_yesterday"] or 0
-            zero_yesterday: int  = r2["zero_yesterday"] or 0
+            zero_yesterday: int = r2["zero_yesterday"] or 0
 
             # Connected = distinct editors that sent `initialize` in last 4h.
             # SSE connections are long-lived; initialize fires once at connect
@@ -617,15 +640,14 @@ class MetricsStore:
                 """,
                 (threshold,),
             ).fetchone()
-            total_users: int   = adoption_rows["total"] or 0
-            active_users: int  = adoption_rows["active"] or 0
-            never_called: int  = adoption_rows["never_called"] or 0
+            total_users: int = adoption_rows["total"] or 0
+            active_users: int = adoption_rows["active"] or 0
+            never_called: int = adoption_rows["never_called"] or 0
             inactive_users: int = total_users - active_users - never_called
 
         # Build filled hourly series (24 slots)
         hourly_by_h: dict[int, tuple[int, int]] = {
-            r["hour"]: (r["ok_count"] or 0, r["err_count"] or 0)
-            for r in hourly_rows
+            r["hour"]: (r["ok_count"] or 0, r["err_count"] or 0) for r in hourly_rows
         }
         hourly: list[dict] = []
         for h in range(24):
@@ -636,8 +658,8 @@ class MetricsStore:
         daily_by_day: dict[str, dict] = {
             r["day"]: {
                 "search": r["search_count"] or 0,
-                "get":    r["get_count"] or 0,
-                "list":   r["list_count"] or 0,
+                "get": r["get_count"] or 0,
+                "list": r["list_count"] or 0,
             }
             for r in daily_rows
         }
@@ -653,19 +675,16 @@ class MetricsStore:
         # Live users list
         live_users = [
             {
-                "user_name":  row["user_name"],
-                "editor":     row["editor_name"] or "—",
-                "calls_24h":  row["calls_24h"],
-                "last_call":  row["last_call"],
+                "user_name": row["user_name"],
+                "editor": row["editor_name"] or " - ",
+                "calls_24h": row["calls_24h"],
+                "last_call": row["last_call"],
             }
             for row in live_rows
         ]
 
         # Top tools list
-        top_tools = [
-            {"tool": r["tool_name"], "calls": r["n"]}
-            for r in top_tool_rows
-        ]
+        top_tools = [{"tool": r["tool_name"], "calls": r["n"]} for r in top_tool_rows]
         max_calls = top_tools[0]["calls"] if top_tools else 1
         for t in top_tools:
             t["share"] = round(t["calls"] / max_calls, 3)
@@ -691,6 +710,30 @@ class MetricsStore:
             live_users=live_users,
             top_tools=top_tools,
         )
+
+    async def requirement_linked_rate(self, *, window_days: int = 30) -> float:
+        """% of start_task calls in the window that carried requirement_id."""
+        return await asyncio.to_thread(self._requirement_linked_rate_sync, window_days)
+
+    def _requirement_linked_rate_sync(self, window_days: int) -> float:
+        cutoff = _iso_offset(days=window_days)
+        with _connect(self._path) as conn:
+            row = conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN requirement_id IS NOT NULL AND requirement_id != ''
+                             THEN 1 ELSE 0 END) AS linked
+                FROM calls
+                WHERE tool_name = 'start_task' AND created_at >= ?
+                """,
+                (cutoff,),
+            ).fetchone()
+        total = int(row["total"] or 0)
+        linked = int(row["linked"] or 0)
+        if total == 0:
+            return 0.0
+        return round(100.0 * linked / total, 1)
 
     async def list_recent_calls(self, *, limit: int) -> list[CallRow]:
         return await asyncio.to_thread(self._list_recent_calls_sync, limit)
@@ -869,6 +912,40 @@ def args_to_doc_path(tool_name: str, arguments: dict) -> str | None:
     project = arguments.get("project")
     if not project:
         return None
+
+    # Unified get_doc(kind=...) - preferred path.
+    if tool_name == "get_doc":
+        kind = arguments.get("kind")
+        name = arguments.get("name")
+        if kind == "agents":
+            return f"{project}/AGENTS.md"
+        if kind == "guardrails":
+            return f"{project}/core/guardrails.md+definition-of-done.md"
+        if kind == "architecture":
+            if name:
+                return f"{project}/architecture/decisions/{name}.md"
+            return f"{project}/architecture/overview.md"
+        if kind == "language":
+            if not name:
+                return None
+            doc = arguments.get("doc") or "standards"
+            return f"{project}/languages/{name}/{doc}.md"
+        if kind == "pattern":
+            return f"{project}/patterns/{name}.md" if name else None
+        if kind == "skill":
+            return f"{project}/skills/{name}.md" if name else None
+        if kind == "workflow":
+            return f"{project}/workflows/{name}.md" if name else None
+        if kind == "gate":
+            if name:
+                script = name if str(name).endswith(".sh") else f"{name}.sh"
+                return f"{project}/gates/scripts/{script}"
+            return f"{project}/gates/README.md"
+        if kind == "requirement":
+            return f"requirements/{project}/{name}" if name else None
+        return None
+
+    # Legacy tool names kept for historical metrics rows / old clients.
     if tool_name == "get_agents_md":
         return f"{project}/AGENTS.md"
     if tool_name == "get_index":

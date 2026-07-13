@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Manage Users — {{ server_label }}{% endblock %}
+{% block title %}Manage Users - {{ server_label }}{% endblock %}
 {% block crumb %}Manage Users{% endblock %}
 
 {% block content %}
@@ -49,7 +49,7 @@
         <option value="admin">Admin</option>
       </select>
     </div>
-    <button type="submit" style="padding:.5rem 1.25rem;background:var(--accent,#6366f1);color:#fff;border:none;border-radius:.5rem;font-size:.875rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:.5rem">
+    <button type="submit" style="padding:.5rem 1.25rem;background:var(--accent,var(--violet-500));color:#fff;border:none;border-radius:.5rem;font-size:.875rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:.5rem">
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Create User
     </button>
@@ -65,7 +65,7 @@
 {% if auth_users %}
 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:.875rem">
   {% for u in auth_users %}
-  {% set colors = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6'] %}
+  {% set colors = ['#7C3AED','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6'] %}
   {% set color = colors[loop.index0 % colors|length] %}
   <div class="card" style="padding:0">
     <div style="padding:1.25rem">
@@ -79,7 +79,7 @@
           <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
             <span style="font-weight:600;font-size:.9375rem;color:var(--text,#111827);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ u.username }}</span>
             {% if u.role == 'admin' %}
-              <span style="font-size:.6875rem;font-weight:700;padding:.15rem .5rem;border-radius:.25rem;background:rgba(99,102,241,.12);color:#6366f1;letter-spacing:.04em;text-transform:uppercase;border:1px solid rgba(99,102,241,.2)">Admin</span>
+              <span style="font-size:.6875rem;font-weight:700;padding:.15rem .5rem;border-radius:.25rem;background:var(--violet-50);color:var(--violet-700);letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--violet-100)">Admin</span>
             {% else %}
               <span style="font-size:.6875rem;font-weight:600;padding:.15rem .5rem;border-radius:.25rem;background:var(--surface-alt,#f3f4f6);color:var(--text-muted,#6b7280);letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--border,#e5e7eb)">User</span>
             {% endif %}

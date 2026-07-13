@@ -1,10 +1,10 @@
 """
-dashboard/auth_routes.py — Browser login / logout for the dashboard.
+dashboard/auth_routes.py - Browser login / logout for the dashboard.
 
 Routes (registered in server.py):
-  GET  /login   — render login form (redirect to /dashboard/ if already logged in)
-  POST /login   — validate credentials, set session cookie, redirect
-  POST /logout  — revoke session token, clear cookie, redirect to /login
+  GET  /login - render login form (redirect to /dashboard/ if already logged in)
+  POST /login - validate credentials, set session cookie, redirect
+  POST /logout - revoke session token, clear cookie, redirect to /login
 
 These routes are PUBLIC (no auth required before reaching them) so that
 unauthenticated users can log in. POST /login and POST /logout both validate
@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 _templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
+
 def _safe_next(next_url: str | None) -> str:
     """Validate the ?next= redirect target to prevent open-redirect attacks."""
     if not next_url:
@@ -43,8 +44,8 @@ def _is_secure(request: Request) -> bool:
 
 
 def build_auth_routes(
-    auth_store: "AuthStore",
-    session: "DashboardSession",
+    auth_store: AuthStore,
+    session: DashboardSession,
     server_label: str,
 ) -> tuple:
     """Return (login_get, login_post, logout_post) handlers."""
@@ -119,9 +120,7 @@ def build_auth_routes(
         # entirely by the sliding Max-Age on the cookie. Use the same sliding
         # window from the start so the cookie's lifetime is consistent across
         # the very first response and every subsequent one.
-        token_data = await auth_store.create_token(
-            user["id"], None, token_type="session"
-        )
+        token_data = await auth_store.create_token(user["id"], None, token_type="session")
         secure = _is_secure(request)
         next_url = _safe_next(str(form.get("next", "")))
 
@@ -134,9 +133,7 @@ def build_auth_routes(
     async def logout_post(request: Request) -> Response:
         form = await request.form()
         if not _form_csrf_valid(request, form):
-            return HTMLResponse(
-                "403 Forbidden — invalid CSRF token.", status_code=403
-            )
+            return HTMLResponse("403 Forbidden - invalid CSRF token.", status_code=403)
 
         token = _read_session_token(request)
         if token:

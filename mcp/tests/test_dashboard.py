@@ -22,7 +22,7 @@ async def app_with_data(tmp_rules_root: Path, tmp_path: Path):
     metrics = server.MetricsStore(tmp_path / "metrics.db")
     await metrics.init()
 
-    # Seed: alice (active), bob (never-called), charlie (inactive — old call)
+    # Seed: alice (active), bob (never-called), charlie (inactive - old call)
     await metrics.upsert_registration(
         user_id="u1",
         user_name="alice",

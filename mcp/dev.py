@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-dev.py — one-shot dev runner.
+dev.py - one-shot dev runner.
 
   uv run dev.py            # regen INDEX.md → validate → start server
   uv run dev.py --no-regen # skip regen, validate, start server
@@ -47,15 +47,18 @@ def _run_validator(*flags: str) -> int:
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--no-regen", action="store_true",
+        "--no-regen",
+        action="store_true",
         help="Skip the INDEX.md regeneration step.",
     )
     parser.add_argument(
-        "--no-check", action="store_true",
-        help="Skip the validator (will WARN — server may load a broken corpus).",
+        "--no-check",
+        action="store_true",
+        help="Skip the validator (will WARN - server may load a broken corpus).",
     )
     parser.add_argument(
-        "--no-serve", action="store_true",
+        "--no-serve",
+        action="store_true",
         help="Run regen + check, then exit. The MCP server is not started.",
     )
     return parser.parse_args(argv)
@@ -80,12 +83,15 @@ def main(argv: list[str] | None = None) -> int:
         _banner("Validating rule corpus…")
         rc = _run_validator("--check")
         if rc != 0:
-            _fail("Server not started — fix the errors above and re-run.")
+            _fail("Server not started - fix the errors above and re-run.")
             return rc
         _ok("Validation passed")
     else:
-        print("⚠  Skipping validation (--no-check). The server may load a broken corpus.",
-              file=sys.stderr, flush=True)
+        print(
+            "⚠  Skipping validation (--no-check). The server may load a broken corpus.",
+            file=sys.stderr,
+            flush=True,
+        )
 
     if args.no_serve:
         _ok("Done (--no-serve set; not starting the MCP server).")
@@ -94,6 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     _banner("Starting MCP server…")
     # Imported lazily so --no-serve users don't pay startup cost.
     import server
+
     server.main()
     return 0
 

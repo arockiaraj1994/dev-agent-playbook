@@ -1,4 +1,4 @@
-"""tools/ — MCP tool modules.
+"""tools/ - MCP tool modules.
 
 Every tool this server exposes only reads markdown from disk: nothing writes,
 mutates, or reaches the network (gate scripts are shown, never executed). So a

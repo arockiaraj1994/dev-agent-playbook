@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}{{ status.project }} — Projects{% endblock %}
-{% block crumb %}<a href="/dashboard/projects" style="color:inherit">Projects</a> <span class="crumbs-sep">/</span> <span class="current">{{ status.project }}</span>{% endblock %}
+{% block title %}{{ status.project }} - Standards{% endblock %}
+{% block crumb %}<a href="/dashboard/projects" style="color:inherit">Standards</a> <span class="crumbs-sep">/</span> <span class="current">{{ status.project }}</span>{% endblock %}
 
 {% block content %}
 
@@ -11,7 +11,7 @@
       {{ status.project }}
     </h1>
     <p class="page-sub">
-      {{ status.total_files }} indexed file{{ '' if status.total_files == 1 else 's' }} —
+      {{ status.total_files }} indexed file{{ '' if status.total_files == 1 else 's' }} - 
       <span style="color:var(--text)">🟢 {{ status.counts.green }}</span> ·
       <span style="color:var(--amber-700)">🟡 {{ status.counts.amber }}</span> ·
       <span style="color:var(--red-700)">🔴 {{ status.counts.red }}</span>
@@ -60,7 +60,7 @@
     <details class="file-card file-{{ fs.indicator }}">
       <summary class="file-summary">
         <span class="indicator-dot indicator-{{ fs.indicator }}"
-              title="{{ fs.indicator|capitalize }} — {{ fs.failed|length }} rule(s) failing"></span>
+              title="{{ fs.indicator|capitalize }} - {{ fs.failed|length }} rule(s) failing"></span>
         <code class="file-path">{{ fs.relative_path }}</code>
         {% if fs.title and fs.title != fs.name %}
           <span class="file-title">{{ fs.title }}</span>
