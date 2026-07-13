@@ -8,6 +8,38 @@ changes after 1.0.0 will bump the **major**.
 
 ## [Unreleased]
 
+### Changed — BREAKING (tool surface: 13 → 11)
+- **`list_rule_docs` + `search_rules` → `find_rules(project, query?, doc_type?, top_k?)`.**
+  Omit `query` to list docs (now including each doc's `triggers:`), pass `query`
+  for BM25 search. `project` is now required in both modes.
+- **`get_index` removed.** Its trigger map is surfaced by `find_rules` list mode.
+  `INDEX.md` is still generated and still the human-facing map.
+- **`start_task` is now the sole documented entry point.** `list_projects` and
+  `get_guardrails` no longer tell the agent to call them first, and
+  `get_agents_md` is explicitly demoted in its description. Telemetry showed
+  three competing "call this first" tools caused agents to default to
+  `get_agents_md` instead.
+- `start_task` now inlines the `## IDENTITY` section of `AGENTS.md`, so a single
+  call fully orients the agent.
+
+### Fixed
+- **`get_agents_md` was a dead end.** It is the only doc tool whose content had
+  no `see_also:` frontmatter, so it returned no `## Next Calls` block and the
+  agent's chain stopped there — which is why it dominated the call log. Both
+  `AGENTS.md` files now declare `see_also: [tool:start_task, …]`.
+- **`see_also` entries with an unrecognized kind were silently dropped.**
+  `_format_call` knew only 6 kinds, so `core:guardrails` (3 nexre workflows) and
+  `gates:README` (`nexre/skills/release.md`) rendered nothing. Added the `tool:`
+  and `core:` kinds and the `gates` alias, and `validate-rules.py` now fails on
+  an unknown kind instead of letting it disappear.
+- `get_gate(name=…)` now returns the script's first lines, as its description
+  always promised (it previously returned only the path).
+- `start_task` no longer collides the workflow body with the trailing `---` rule.
+
+### Added
+- All 11 tools are annotated `readOnlyHint: true` / `openWorldHint: false`,
+  stamped centrally in `list_tools()` so a new tool cannot omit them.
+
 ## [0.3.0]
 
 ### Added

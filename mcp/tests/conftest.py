@@ -58,8 +58,12 @@ def tmp_rules_root(tmp_path: Path) -> Path:
         "title: Proj A agents\n"
         "description: Identity and behavior for proj-a.\n"
         "tags: [stack-a, rest]\n"
+        "see_also: [tool:start_task, tool:get_guardrails, workflow:bug-fix]\n"
         "---\n"
-        "# AGENTS.md — Proj A\n\nBe careful with errorHandler boundaries.\n",
+        "# AGENTS.md — Proj A\n\n"
+        "## IDENTITY\n\nYou are a senior proj-a engineer who fixes root causes.\n\n"
+        "---\n\n"
+        "## OTHER\n\nBe careful with errorHandler boundaries.\n",
     )
     _write(a / "INDEX.md", "<!-- AUTO-GENERATED -->\n# INDEX — proj-a\n")
     _write(a / "README.md", "# Proj A — humans only\n")
@@ -91,12 +95,13 @@ def tmp_rules_root(tmp_path: Path) -> Path:
     )
     _write(
         a / "skills" / "bar.md",
+        "---\nsee_also: [gates:README]\n---\n"
         "# Skill: Bar — when adding a new connector\nSteps: 1. ... 2. ... 3. ...\n",
     )
     _write(
         a / "workflows" / "bug-fix.md",
         "---\ntriggers: [bug, fix a bug, debug]\ngates: [verify-java]\n"
-        "see_also: [skill:bar, pattern:foo]\n---\n"
+        "see_also: [skill:bar, pattern:foo, core:guardrails]\n---\n"
         "# Workflow: bug-fix — Proj A\nReproduce, isolate, fix, test.\n",
     )
     _write(

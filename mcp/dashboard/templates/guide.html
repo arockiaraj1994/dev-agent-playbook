@@ -37,19 +37,17 @@
             <tr><th>Tool</th><th>When the agent should call it</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>start_task(project, task)</code></td><td><strong>First call for any task.</strong> Free-form sentence in; bootstrap bundle out.</td></tr>
+            <tr><td><code>start_task(project, task)</code></td><td><strong>The entry point — first call for any task.</strong> Free-form sentence in; identity + guardrails + matched workflow out.</td></tr>
             <tr><td><code>list_projects()</code></td><td>Discovery when project name unknown.</td></tr>
-            <tr><td><code>get_index(project)</code></td><td>Browse the trigger map without committing to a task.</td></tr>
             <tr><td><code>get_guardrails(project)</code></td><td>Re-read always-on rules mid-task.</td></tr>
-            <tr><td><code>get_agents_md(project)</code></td><td>Identity / behavior doc.</td></tr>
+            <tr><td><code>get_agents_md(project)</code></td><td>Full identity / stack prose. Not an entry point — <code>start_task</code> already inlines the identity section.</td></tr>
             <tr><td><code>get_architecture(project, name?)</code></td><td>Overview, or a specific ADR.</td></tr>
             <tr><td><code>get_language_rules(project, language, doc?)</code></td><td>Per-language standards / testing / anti-patterns.</td></tr>
             <tr><td><code>get_pattern(project, pattern)</code></td><td>Implementing a known pattern.</td></tr>
             <tr><td><code>get_skill(project, skill)</code></td><td>Executing a verb-noun playbook.</td></tr>
             <tr><td><code>get_workflow(project, name)</code></td><td>Working a task-driven flow (<code>new-feature</code>, <code>bug-fix</code>, <code>security-fix</code>, <code>refactor</code>).</td></tr>
-            <tr><td><code>get_gate(project, name?)</code></td><td>Verifying done-ness; lists or describes <code>verify-*.sh</code> scripts.</td></tr>
-            <tr><td><code>list_rule_docs(project, doc_type?)</code></td><td>Discovery within a project.</td></tr>
-            <tr><td><code>search_rules(query, …)</code></td><td>BM25 fallback when nothing else matches.</td></tr>
+            <tr><td><code>get_gate(project, name?)</code></td><td>Verifying done-ness; lists <code>verify-*.sh</code> scripts or shows a script's first lines.</td></tr>
+            <tr><td><code>find_rules(project, query?, doc_type?)</code></td><td>Discovery. Omit <code>query</code> to list every doc with its trigger phrases; pass <code>query</code> for BM25 search.</td></tr>
           </tbody>
         </table>
       </div>
@@ -62,7 +60,7 @@
 
       <div class="callout">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-        <div>Before writing a new doc, check what's already there: <a href="/dashboard/searches"><strong>Browse existing rules →</strong></a> — and copy from a live project (<code>apache-camel/</code>, <code>baton-sso-config/</code>, <code>integration-manager/</code>) for a known-good baseline.</div>
+        <div>Before writing a new doc, check what's already there: <a href="/dashboard/searches"><strong>Browse existing rules →</strong></a> — and copy from a live project (<code>apache-camel/</code>, <code>nexre/</code>) for a known-good baseline.</div>
       </div>
 
       <p>Every project directory follows this shape. Files marked <strong>required</strong> are checked by <code>scripts/validate-rules.py</code>; the validator fails CI if any are missing.</p>
@@ -116,10 +114,10 @@
           </thead>
           <tbody>
             <tr><td><code>AGENTS.md</code></td><td><code>agents</code></td><td><code>get_agents_md</code></td></tr>
-            <tr><td><code>INDEX.md</code></td><td><code>index</code></td><td><code>get_index</code></td></tr>
+            <tr><td><code>INDEX.md</code></td><td><code>index</code></td><td><code>find_rules</code> (trigger phrases are listed inline)</td></tr>
             <tr><td><code>core/guardrails.md</code></td><td><code>guardrails</code></td><td rowspan="2"><code>get_guardrails</code></td></tr>
             <tr><td><code>core/definition-of-done.md</code></td><td><code>definition-of-done</code></td></tr>
-            <tr><td><code>core/glossary.md</code></td><td><code>glossary</code></td><td><code>list_rule_docs</code> / <code>search_rules</code></td></tr>
+            <tr><td><code>core/glossary.md</code></td><td><code>glossary</code></td><td><code>find_rules</code></td></tr>
             <tr><td><code>architecture/overview.md</code></td><td><code>architecture</code></td><td rowspan="2"><code>get_architecture</code></td></tr>
             <tr><td><code>architecture/decisions/&lt;n&gt;.md</code></td><td><code>architecture-decision</code></td></tr>
             <tr><td><code>languages/&lt;lang&gt;/&lt;doc&gt;.md</code></td><td><code>language-rules</code></td><td><code>get_language_rules</code></td></tr>

@@ -219,7 +219,7 @@ def test_workflow_frontmatter_indexes_triggers_and_see_also(tmp_rules_root: Path
     )
     assert wf.doc_type == "workflow"
     assert wf.metadata.get("triggers") == ["bug", "fix a bug", "debug"]
-    assert wf.metadata.get("see_also") == ["skill:bar", "pattern:foo"]
+    assert wf.metadata.get("see_also") == ["skill:bar", "pattern:foo", "core:guardrails"]
     assert wf.metadata.get("gates") == ["verify-java"]
 
 

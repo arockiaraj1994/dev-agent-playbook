@@ -108,8 +108,8 @@ A project is a directory next to `mcp/` that holds rule docs for one codebase or
       verify-<lang>.sh               ← executable verification (lint + tests + security)
 ```
 
-Use `TEMPLATE.md` for copy-pasteable starters and look at `apache-camel/`,
-`baton-sso-config/`, or `integration-manager/` for live examples.
+Use `TEMPLATE.md` for copy-pasteable starters and look at `apache-camel/` or
+`nexre/` for live examples.
 
 ### Step 2 — Write `AGENTS.md` first
 
@@ -175,25 +175,32 @@ and chain forward from there. The contract:
 
 | Tool | When to call |
 |---|---|
-| `start_task(project, task)` | **First call for any task.** Returns guardrails + the matched workflow + `Next Calls` pointing at the skills/patterns to fetch next. |
+| `start_task(project, task)` | **The entry point — first call for any task.** Returns the project's identity + guardrails + the matched workflow + `Next Calls` pointing at the skills/patterns to fetch next. |
 | `get_guardrails(project)` | Re-read always-on rules mid-task. |
-| `get_index(project)` | Browse the trigger map without committing to a task. |
-| `get_agents_md(project)` | Identity / behavior doc. |
+| `get_agents_md(project)` | Full identity / stack prose. Not an entry point — `start_task` already inlines the identity section. |
 | `get_architecture(project, name?)` | System overview, or a specific ADR. |
 | `get_language_rules(project, language, doc?)` | Language standards / testing / anti-patterns. |
 | `get_pattern(project, pattern)` | Canonical code pattern. |
 | `get_skill(project, skill)` | Verb-noun playbook. |
 | `get_workflow(project, name)` | One of `new-feature`, `bug-fix`, `security-fix`, `refactor`. |
-| `get_gate(project, name?)` | Gate README + script listing; or metadata for a specific `verify-*.sh`. |
-| `search_rules(query, …)` | BM25 fallback when nothing else matches. |
-| `list_projects()` / `list_rule_docs(project, doc_type?)` | Discovery. |
+| `get_gate(project, name?)` | Gate README + script listing; or the first lines of a specific `verify-*.sh`. |
+| `find_rules(project, query?, doc_type?)` | Discovery. Omit `query` to list every doc with its trigger phrases; pass `query` for BM25 search. |
+| `list_projects()` | Available project names. |
+
+All eleven tools are read-only and annotated as such (`readOnlyHint`), so
+clients can auto-approve them without prompting.
+
+Every doc response ends with a `## Next Calls` block generated from that
+doc's `see_also:` frontmatter, naming the exact follow-up calls to make. A
+doc with no `see_also:` is a dead end for the agent — which is why
+`AGENTS.md` declares `tool:start_task`.
 
 ### Sample prompts
 
 ```
 Add a new SFTP inbound route for payments to the apache-camel project.
 I need to fix a bug where the orders route is dropping messages.
-We have a CVE on Quarkus in integration-manager — patch it.
+We have a CVE on Quarkus in apache-camel — patch it.
 Refactor the invoice processor without changing behavior.
 ```
 

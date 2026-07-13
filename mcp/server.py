@@ -1,20 +1,18 @@
 """
 server.py — Dev Agent Playbook MCP Server (SSE only; read-only rules + usage metrics).
 
-Tools:
+Tools (11, all read-only):
+  - start_task           — THE entry point: identity + guardrails + workflow + next_calls
   - list_projects
-  - list_rule_docs
-  - start_task           — one-call orientation (guardrails + workflow + next_calls)
+  - find_rules           — list docs (no query) or BM25 search (with query)
   - get_agents_md
   - get_guardrails       — always-on rules
-  - get_index            — auto-generated trigger map
   - get_architecture     — overview + ADRs
   - get_language_rules   — per-language standards / testing / anti-patterns
   - get_pattern
   - get_skill
   - get_workflow         — task-driven flows
-  - get_gate             — gate README + script listing
-  - search_rules
+  - get_gate             — gate README + script listing/preview
 
 Run:
   uv run server.py
@@ -83,6 +81,7 @@ from identity import (
 from metrics import MetricsStore, summarize_args
 from search import RulesSearchEngine
 from session import DashboardSession
+from tools import READ_ONLY
 from tools import docs as _docs_mod
 from tools import projects as _projects_mod
 from tools import search_tool as _search_mod
@@ -152,9 +151,14 @@ _TOOL_MODULES = [_projects_mod, _start_task_mod, _docs_mod, _search_mod]
 
 @server.list_tools()
 async def list_tools() -> list[Tool]:
+    # Every tool here is read-only; stamp the annotation centrally so a new
+    # tool cannot ship without it. model_copy keeps module DEFINITIONS pristine.
     defs: list[Tool] = []
     for mod in _TOOL_MODULES:
-        defs.extend(mod.DEFINITIONS)
+        defs.extend(
+            t if t.annotations else t.model_copy(update={"annotations": READ_ONLY})
+            for t in mod.DEFINITIONS
+        )
     return defs
 
 

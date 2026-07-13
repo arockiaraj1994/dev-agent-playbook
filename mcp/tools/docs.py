@@ -3,7 +3,6 @@
 Tools defined here:
   - get_agents_md         — identity / behavior doc
   - get_guardrails        — always-on rules (guardrails + definition-of-done)
-  - get_index             — auto-generated trigger map
   - get_architecture      — overview or named ADR
   - get_language_rules    — per-language standards / testing / anti-patterns
   - get_pattern           — canonical noun-named code pattern
@@ -19,10 +18,14 @@ fetch is self-describing and chains forward.
 
 from __future__ import annotations
 
+import logging
+
 from mcp.types import TextContent, Tool
 
-from loader import RuleDoc, RulesStore
+from loader import SEE_ALSO_CORE, SEE_ALSO_TOOLS, RuleDoc, RulesStore, resolve_rules_root
 from search import RulesSearchEngine
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Tool definitions
@@ -36,8 +39,12 @@ DEFINITIONS: list[Tool] = [
     Tool(
         name="get_agents_md",
         description=(
-            "Call this when you need the project's identity / behavior doc "
-            "(AGENTS.md). Returns the top-level AGENTS.md content."
+            "Background identity / stack narrative for a project (AGENTS.md). "
+            "This is NOT the entry point and does not orient you for a task — "
+            "call start_task for that; it already inlines this doc's identity "
+            "section along with the guardrails and the matched workflow. Use "
+            "get_agents_md only when you specifically need the project's full "
+            "identity/stack prose."
         ),
         inputSchema={
             "type": "object",
@@ -53,24 +60,10 @@ DEFINITIONS: list[Tool] = [
     Tool(
         name="get_guardrails",
         description=(
-            "Call this at the start of every task and any time you need to "
-            "re-check the always-on rules. Returns core/guardrails.md "
-            "concatenated with core/definition-of-done.md."
-        ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "project": {"type": "string", "description": "Project name."},
-            },
-            "required": ["project"],
-        },
-    ),
-    Tool(
-        name="get_index",
-        description=(
-            "Call this to browse the trigger map (task-phrase → doc paths) "
-            "without committing to a specific task. Returns the auto-generated "
-            "INDEX.md."
+            "Re-read the always-on rules mid-task. start_task already bundles "
+            "these, so reach for it only when re-checking rules later in a "
+            "task. Returns core/guardrails.md concatenated with "
+            "core/definition-of-done.md."
         ),
         inputSchema={
             "type": "object",
@@ -117,7 +110,7 @@ DEFINITIONS: list[Tool] = [
                     "description": (
                         "Language code matching a folder under languages/ "
                         "(e.g. java, typescript, python, kotlin, sql, "
-                        "shell-yaml). Use list_rule_docs with "
+                        "shell-yaml). Use find_rules with "
                         "doc_type=\"language-rules\" to see what is available."
                     ),
                 },
@@ -138,7 +131,7 @@ DEFINITIONS: list[Tool] = [
         description=(
             "Call this when GENERATING code that should follow a canonical "
             "pattern. Returns patterns/<name>.md. If you don't know the "
-            "name, call list_rule_docs with doc_type=\"pattern\"."
+            "name, call find_rules with doc_type=\"pattern\"."
         ),
         inputSchema={
             "type": "object",
@@ -228,8 +221,9 @@ _NAMES = {t.name for t in DEFINITIONS}
 def _next_calls_section(doc: RuleDoc, project: str) -> str:
     """Render a `## Next Calls` block from `see_also` frontmatter.
 
-    `see_also` entries are of the form `<kind>:<name>`, where kind is one of:
-        pattern, skill, workflow, gate, language, architecture, ref
+    `see_also` entries are of the form `<kind>:<name>`, where kind is one of
+    `loader.SEE_ALSO_KINDS`. An unrecognized kind renders nothing, which is
+    why validate-rules.py rejects them.
     """
     raw = doc.metadata.get("see_also") or []
     if not isinstance(raw, list) or not raw:
@@ -254,14 +248,21 @@ def _next_calls_section(doc: RuleDoc, project: str) -> str:
 
 
 def _format_call(kind: str, project: str, name: str) -> str | None:
+    if kind == "tool":
+        return _format_tool_call(project, name)
+    if kind == "core":
+        # Both core docs are served by the same tool.
+        if name in SEE_ALSO_CORE:
+            return f"`get_guardrails(project=\"{project}\")` — always-on rules"
+        return None
     if kind == "pattern":
         return f"`get_pattern(project=\"{project}\", pattern=\"{name}\")` — pattern `{name}`"
     if kind == "skill":
         return f"`get_skill(project=\"{project}\", skill=\"{name}\")` — skill `{name}`"
     if kind == "workflow":
         return f"`get_workflow(project=\"{project}\", name=\"{name}\")` — workflow `{name}`"
-    if kind == "gate":
-        suffix = "" if name in ("", "gate") else f", name=\"{name}\""
+    if kind in ("gate", "gates"):
+        suffix = "" if name in ("", "gate", "README") else f", name=\"{name}\""
         return f"`get_gate(project=\"{project}\"{suffix})` — gate `{name}`"
     if kind == "language":
         # `language:java/standards` or `language:java`
@@ -282,6 +283,26 @@ def _format_call(kind: str, project: str, name: str) -> str | None:
             f"`get_architecture(project=\"{project}\", name=\"{name}\")` — ADR `{name}`"
         )
     return None
+
+
+def _format_tool_call(project: str, name: str) -> str | None:
+    """Render a `see_also: [tool:<name>]` entry as a literal tool call."""
+    if name not in SEE_ALSO_TOOLS:
+        return None
+    if name == "start_task":
+        return (
+            f"**START HERE** — `start_task(project=\"{project}\", "
+            "task=\"<one sentence describing what the user asked for>\")` "
+            "— guardrails + matched workflow in one call"
+        )
+    if name == "get_guardrails":
+        return f"`get_guardrails(project=\"{project}\")` — always-on rules"
+    if name == "find_rules":
+        return (
+            f"`find_rules(project=\"{project}\")` — list every rule doc "
+            "(add `query=` to search)"
+        )
+    return "`list_projects()` — available projects"
 
 
 def _render(doc: RuleDoc, project: str) -> str:
@@ -322,9 +343,6 @@ async def dispatch(
 
     if name == "get_guardrails":
         return _get_guardrails(store, ctx, project)
-
-    if name == "get_index":
-        return _fetch(store, ctx, project, "INDEX.md", "INDEX.md (have you run validate-rules.py?)")
 
     if name == "get_architecture":
         adr = (arguments.get("name") or "").strip()
@@ -382,7 +400,7 @@ def _fetch(
         return _not_found(
             f"{label} not found for project '{project}' "
             f"(expected at {relative_path}). "
-            "Call list_rule_docs to see what is available."
+            "Call find_rules to see what is available."
         )
     return [TextContent(type="text", text=_render(doc, project))]
 
@@ -437,13 +455,33 @@ def _get_gate(
             f"Gate script '{script_filename}' not found for project '{project}'. "
             f"Available: {scripts or '[]'}."
         )
-    # Show metadata, not contents — server is read-only and never executes.
     text = (
         f"# Gate: {script_filename}\n\n"
         f"Path: `{project}/gates/scripts/{script_filename}`\n\n"
         "The MCP server does not execute gate scripts. To run it locally:\n\n"
-        f"```\nbash {project}/gates/scripts/{script_filename}\n```\n\n"
-        "See the gate README for what this script enforces:\n\n"
+        f"```\nbash {project}/gates/scripts/{script_filename}\n```\n"
+        + _script_preview(project, script_filename)
+        + "\nSee the gate README for what this script enforces:\n\n"
         + gate.content
     )
     return [TextContent(type="text", text=text)]
+
+
+def _script_preview(project: str, script_filename: str, max_lines: int = 40) -> str:
+    """First lines of a gate script, for the agent to read (never executed).
+
+    `script_filename` is already validated against the `gate_scripts` directory
+    listing by the caller, so it cannot escape gates/scripts/.
+    """
+    path = resolve_rules_root() / project / "gates" / "scripts" / script_filename
+    try:
+        with path.open(encoding="utf-8") as fh:
+            lines = [next(fh, None) for _ in range(max_lines)]
+    except OSError as exc:
+        logger.warning("Could not read gate script %s: %s", path, exc)
+        return ""
+    body = "".join(line for line in lines if line is not None).rstrip()
+    if not body:
+        return ""
+    truncated = "\n… (truncated)" if lines[-1] is not None else ""
+    return f"\n## First {max_lines} lines\n\n```bash\n{body}{truncated}\n```\n"
