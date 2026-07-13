@@ -1,4 +1,4 @@
-"""Tests for auth.py — AuthStore: users, tokens, password hashing."""
+"""Tests for auth.py - AuthStore: users, tokens, password hashing."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from auth import AuthStore, _hash_password, _verify_password
-
 
 # ---------------------------------------------------------------------------
 # Password helpers
@@ -30,7 +29,7 @@ def test_hash_is_non_deterministic() -> None:
 
 
 # ---------------------------------------------------------------------------
-# AuthStore — users
+# AuthStore - users
 # ---------------------------------------------------------------------------
 
 
@@ -68,7 +67,7 @@ async def test_create_user(store: AuthStore) -> None:
 @pytest.mark.asyncio
 async def test_duplicate_username_raises(store: AuthStore) -> None:
     await store.create_user("alice", "pass1", "user")
-    with pytest.raises(Exception):
+    with pytest.raises(Exception):  # noqa: B017
         await store.create_user("alice", "pass2", "user")
 
 
@@ -93,7 +92,7 @@ async def test_verify_login_unknown_user(store: AuthStore) -> None:
 
 
 # ---------------------------------------------------------------------------
-# AuthStore — tokens
+# AuthStore - tokens
 # ---------------------------------------------------------------------------
 
 
@@ -182,7 +181,6 @@ async def test_expired_token_not_resolved(store: AuthStore, monkeypatch) -> None
     token_data = await store.create_token(user["id"], expires_in_days=1, token_type="mcp")
     token = token_data["token"]
 
-    from datetime import timezone
     import auth as auth_mod
 
     future = datetime.now(UTC) + timedelta(days=2)
@@ -190,7 +188,7 @@ async def test_expired_token_not_resolved(store: AuthStore, monkeypatch) -> None
     class FakeDatetime(datetime):
         @classmethod
         def now(cls, tz=None):
-            return future.replace(tzinfo=tz or timezone.utc)
+            return future.replace(tzinfo=tz or UTC)
 
     monkeypatch.setattr(auth_mod, "datetime", FakeDatetime)
     principal = store._resolve_token_sync(token, "mcp")

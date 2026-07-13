@@ -1,26 +1,16 @@
 #!/usr/bin/env python3
 """
-validate-rules.py — Pre-commit / CI gate for rule docs.
-
-Responsibilities:
-  1. Validate the per-project layout under <repo>/<project>/:
-       - AGENTS.md present
-       - core/{guardrails,definition-of-done,glossary}.md present
-       - architecture/overview.md present
-       - At least one languages/<lang>/standards.md
-       - All workflows present (new-feature, bug-fix, security-fix, refactor)
-       - gates/README.md present, gates/scripts/*.sh executable
-  2. Optional YAML frontmatter parses cleanly.
-  3. Doc type inferred from path is never `other`.
-  4. Relative markdown links resolve.
-  5. Auto-generate (or check) <project>/INDEX.md from frontmatter.
+validate-rules.py - Pre-commit / CI gate for standards and requirements docs.
 
 Modes:
-    python scripts/validate-rules.py             # validate
-    python scripts/validate-rules.py --regen-index   # rewrite INDEX.md
-    python scripts/validate-rules.py --check     # validate + check INDEX.md is up to date
+    python scripts/validate-rules.py --corpus standards --check
+    python scripts/validate-rules.py --corpus requirements --check
+    python scripts/validate-rules.py --corpus all --check          # default
+    python scripts/validate-rules.py --corpus all --regen-index
 
-Exits non-zero on any error.
+Exits non-zero on any hard error (draft requirements never hard-fail CI - 
+see requirement_rules status-aware severity; this script reports them as
+warnings when --corpus requirements and all docs are draft).
 """
 
 from __future__ import annotations
@@ -50,17 +40,21 @@ MCP_DIR = REPO_ROOT / "mcp"
 
 # Reuse the loader so this script always agrees with what the server sees.
 sys.path.insert(0, str(MCP_DIR))
+from corpus import (  # noqa: E402
+    REQUIREMENTS,
+    STANDARDS,
+    requirements_spec,
+    standards_spec,
+)
 from loader import (  # noqa: E402
     SEE_ALSO_CORE,
     SEE_ALSO_KINDS,
     SEE_ALSO_TOOLS,
     RuleDoc,
-    _parse_docs,
     _parse_frontmatter,
+    parse_corpus,
 )
 from index_render import render_index  # noqa: E402
-
-EXCLUDED_DIRS = {"mcp", "docs", ".git", ".github", "scripts", ".venv"}
 
 LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 
@@ -74,23 +68,7 @@ REQUIRED_FILES = (
 )
 REQUIRED_WORKFLOWS = ("new-feature", "bug-fix", "security-fix", "refactor")
 
-
-# ---------------------------------------------------------------------------
-# Project discovery
-# ---------------------------------------------------------------------------
-
-
-def _project_dirs(repo_root: Path) -> list[Path]:
-    return [
-        p
-        for p in sorted(repo_root.iterdir())
-        if p.is_dir() and not p.name.startswith(".") and p.name not in EXCLUDED_DIRS
-    ]
-
-
-# ---------------------------------------------------------------------------
-# Structure checks
-# ---------------------------------------------------------------------------
+REQUIRED_REQ_WORKFLOWS = ("write-prd", "write-story")
 
 
 _FIX_HINTS: dict[str, str] = {
@@ -112,8 +90,36 @@ def _hint(msg: str) -> str:
     return ""
 
 
-# (project, category, message) tuples — richer than bare strings
+# (project, category, message) tuples - richer than bare strings
 _Error = tuple[str, str, str]   # (project, category, detail)
+
+
+# ---------------------------------------------------------------------------
+# Project discovery
+# ---------------------------------------------------------------------------
+
+
+def _project_dirs(corpus_root: Path) -> list[Path]:
+    if not corpus_root.is_dir():
+        return []
+    return [
+        p
+        for p in sorted(corpus_root.iterdir())
+        if p.is_dir() and not p.name.startswith(".")
+    ]
+
+
+def _corpus_root(name: str) -> Path:
+    if name == "standards":
+        return standards_spec().root
+    if name == "requirements":
+        return requirements_spec().root
+    raise ValueError(name)
+
+
+# ---------------------------------------------------------------------------
+# Structure checks - standards
+# ---------------------------------------------------------------------------
 
 
 def _check_required_files(projects: list[Path]) -> list[_Error]:
@@ -148,12 +154,26 @@ def _check_required_files(projects: list[Path]) -> list[_Error]:
     return errors
 
 
-def _check_frontmatter(repo_root: Path) -> list[_Error]:
+def _check_req_structure(projects: list[Path]) -> list[_Error]:
+    """Soft structure for requirements projects (AGENTS + write workflows)."""
     errors: list[_Error] = []
-    for md in repo_root.rglob("*.md"):
-        rel = md.relative_to(repo_root)
-        if rel.parts[0] in EXCLUDED_DIRS:
-            continue
+    for project in projects:
+        if not (project / "AGENTS.md").is_file():
+            errors.append((project.name, "required files", "missing required file AGENTS.md"))
+        for wf in REQUIRED_REQ_WORKFLOWS:
+            if not (project / "workflows" / f"{wf}.md").is_file():
+                errors.append(
+                    (project.name, "workflows", f"missing workflows/{wf}.md")
+                )
+    return errors
+
+
+def _check_frontmatter(corpus_root: Path) -> list[_Error]:
+    errors: list[_Error] = []
+    if not corpus_root.is_dir():
+        return errors
+    for md in corpus_root.rglob("*.md"):
+        rel = md.relative_to(corpus_root)
         if len(rel.parts) < 2:
             continue
         project = rel.parts[0]
@@ -172,11 +192,13 @@ def _check_frontmatter(repo_root: Path) -> list[_Error]:
     return errors
 
 
-def _check_links(repo_root: Path) -> list[_Error]:
+def _check_links(corpus_root: Path) -> list[_Error]:
     errors: list[_Error] = []
-    for md in repo_root.rglob("*.md"):
-        rel = md.relative_to(repo_root)
-        if rel.parts[0] in EXCLUDED_DIRS:
+    if not corpus_root.is_dir():
+        return errors
+    for md in corpus_root.rglob("*.md"):
+        rel = md.relative_to(corpus_root)
+        if len(rel.parts) < 2:
             continue
         project = rel.parts[0]
         try:
@@ -207,58 +229,61 @@ def _check_no_other_doc_types(docs: list[RuleDoc]) -> list[_Error]:
 
 
 def _check_see_also_kinds(docs: list[RuleDoc]) -> list[_Error]:
-    """Reject `see_also` entries the server cannot render into a tool call.
-
-    An unknown kind is silently dropped from the `## Next Calls` block, so the
-    doc looks fine on disk while the agent's chain quietly dead-ends.
-    """
+    """Reject `see_also` / `targets` entries the server cannot render."""
     errors: list[_Error] = []
     for d in docs:
-        raw = d.metadata.get("see_also") or []
-        if not isinstance(raw, list):
-            errors.append(
-                (d.project, "see_also", f"{d.project}/{d.relative_path}: see_also must be a list")
-            )
-            continue
-        for entry in raw:
-            where = f"{d.project}/{d.relative_path}: see_also entry '{entry}'"
-            if not isinstance(entry, str) or ":" not in entry:
-                errors.append((d.project, "see_also", f"{where} is not '<kind>:<name>'"))
+        for key in ("see_also", "targets"):
+            raw = d.metadata.get(key) or []
+            if not raw:
                 continue
-            kind, _, name = entry.partition(":")
-            kind, name = kind.strip(), name.strip()
-            if kind not in SEE_ALSO_KINDS:
+            if not isinstance(raw, list):
                 errors.append(
                     (
                         d.project,
-                        "see_also",
-                        f"{where} has unknown kind '{kind}' "
-                        f"(expected one of {', '.join(SEE_ALSO_KINDS)})",
+                        key,
+                        f"{d.project}/{d.relative_path}: {key} must be a list",
                     )
                 )
-            elif kind == "tool" and name not in SEE_ALSO_TOOLS:
-                errors.append(
-                    (
-                        d.project,
-                        "see_also",
-                        f"{where} names unknown tool '{name}' "
-                        f"(expected one of {', '.join(SEE_ALSO_TOOLS)})",
+                continue
+            for entry in raw:
+                where = f"{d.project}/{d.relative_path}: {key} entry '{entry}'"
+                if not isinstance(entry, str) or ":" not in entry:
+                    errors.append((d.project, key, f"{where} is not '<kind>:<name>'"))
+                    continue
+                kind, _, name = entry.partition(":")
+                kind, name = kind.strip(), name.strip()
+                if kind not in SEE_ALSO_KINDS:
+                    errors.append(
+                        (
+                            d.project,
+                            key,
+                            f"{where} has unknown kind '{kind}' "
+                            f"(expected one of {', '.join(SEE_ALSO_KINDS)})",
+                        )
                     )
-                )
-            elif kind == "core" and name not in SEE_ALSO_CORE:
-                errors.append(
-                    (
-                        d.project,
-                        "see_also",
-                        f"{where} names unknown core doc '{name}' "
-                        f"(expected one of {', '.join(SEE_ALSO_CORE)})",
+                elif kind == "tool" and name not in SEE_ALSO_TOOLS:
+                    errors.append(
+                        (
+                            d.project,
+                            key,
+                            f"{where} names unknown tool '{name}' "
+                            f"(expected one of {', '.join(SEE_ALSO_TOOLS)})",
+                        )
                     )
-                )
+                elif kind == "core" and name not in SEE_ALSO_CORE:
+                    errors.append(
+                        (
+                            d.project,
+                            key,
+                            f"{where} names unknown core doc '{name}' "
+                            f"(expected one of {', '.join(SEE_ALSO_CORE)})",
+                        )
+                    )
     return errors
 
 
 # ---------------------------------------------------------------------------
-# INDEX.md generator (delegates to mcp/index_render.py)
+# INDEX.md generator
 # ---------------------------------------------------------------------------
 
 
@@ -283,12 +308,28 @@ def _regen_index(
             if existing != rendered:
                 errors.append((
                     p.name, "index",
-                    f"{p.name}/INDEX.md is out of date — run "
+                    f"{p.name}/INDEX.md is out of date - run "
                     "`python scripts/validate-rules.py --regen-index`.",
                 ))
         else:
             target.write_text(rendered, encoding="utf-8")
     return errors
+
+
+# ---------------------------------------------------------------------------
+# Requirements quality (status-aware) - imported lazily when available
+# ---------------------------------------------------------------------------
+
+
+def _check_requirement_docs(
+    docs: list[RuleDoc], standards_docs: list[RuleDoc]
+) -> tuple[list[_Error], list[_Error]]:
+    """Return (hard_errors, soft_warnings) using requirement_rules."""
+    try:
+        from requirement_rules import validate_requirement_docs
+    except ImportError:
+        return [], []
+    return validate_requirement_docs(docs, standards_docs)
 
 
 # ---------------------------------------------------------------------------
@@ -298,6 +339,12 @@ def _regen_index(
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--corpus",
+        choices=("standards", "requirements", "all"),
+        default="all",
+        help="Which corpus to validate (default: all).",
+    )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
         "--regen-index",
@@ -312,44 +359,108 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = _parse_args(argv if argv is not None else sys.argv[1:])
-
-    print(f"Validating rules under {REPO_ROOT}")
-    projects = _project_dirs(REPO_ROOT)
+def _validate_standards(*, check: bool, regen: bool) -> list[_Error]:
+    root = _corpus_root("standards")
+    print(f"Validating standards under {root}")
+    projects = _project_dirs(root)
     if not projects:
-        print("ERROR: no project directories found.", file=sys.stderr)
-        return 1
+        print("ERROR: no standards project directories found.", file=sys.stderr)
+        return [(".", "projects", "no standards project directories found")]
 
-    docs = _parse_docs(REPO_ROOT)
-    print(f"  Loaded {len(docs)} rule docs across {len(projects)} project(s).")
+    docs = parse_corpus(standards_spec())
+    print(f"  Loaded {len(docs)} standards docs across {len(projects)} project(s).")
 
-    if args.regen_index:
+    if regen:
         _regen_index(projects, docs, check_only=False)
         print(f"  Regenerated INDEX.md for {len(projects)} project(s).")
-        return 0
+        return []
 
-    errors: list[str] = []
+    errors: list[_Error] = []
     errors += _check_required_files(projects)
-    errors += _check_frontmatter(REPO_ROOT)
-    errors += _check_links(REPO_ROOT)
+    errors += _check_frontmatter(root)
+    errors += _check_links(root)
+    errors += _check_no_other_doc_types(docs)
+    errors += _check_see_also_kinds(docs)
+    if check:
+        errors += _regen_index(projects, docs, check_only=True)
+    return errors
+
+
+def _validate_requirements(*, check: bool, regen: bool) -> tuple[list[_Error], list[_Error]]:
+    root = _corpus_root("requirements")
+    print(f"Validating requirements under {root}")
+    projects = _project_dirs(root)
+    if not projects:
+        print("  No requirements projects yet - OK.")
+        return [], []
+
+    docs = parse_corpus(requirements_spec())
+    print(f"  Loaded {len(docs)} requirements docs across {len(projects)} project(s).")
+
+    if regen:
+        _regen_index(projects, docs, check_only=False)
+        print(f"  Regenerated INDEX.md for {len(projects)} project(s).")
+        return [], []
+
+    errors: list[_Error] = []
+    warnings: list[_Error] = []
+    errors += _check_req_structure(projects)
+    errors += _check_frontmatter(root)
+    errors += _check_links(root)
     errors += _check_no_other_doc_types(docs)
     errors += _check_see_also_kinds(docs)
 
-    if args.check:
-        errors += _regen_index(projects, docs, check_only=True)
+    standards_docs = parse_corpus(standards_spec()) if STANDARDS.root.is_dir() else []
+    hard, soft = _check_requirement_docs(docs, standards_docs)
+    errors += hard
+    warnings += soft
 
-    if errors:
-        _print_errors(errors)
+    if check:
+        errors += _regen_index(projects, docs, check_only=True)
+    return errors, warnings
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv if argv is not None else sys.argv[1:])
+    corpora = (
+        ("standards", "requirements")
+        if args.corpus == "all"
+        else (args.corpus,)
+    )
+
+    all_errors: list[_Error] = []
+    all_warnings: list[_Error] = []
+
+    for name in corpora:
+        if name == "standards":
+            all_errors += _validate_standards(check=args.check, regen=args.regen_index)
+        else:
+            errs, warns = _validate_requirements(check=args.check, regen=args.regen_index)
+            all_errors += errs
+            all_warnings += warns
+
+    if args.regen_index:
+        return 0
+
+    if all_warnings:
+        _print_errors(all_warnings, label="WARNINGS", color=_yellow)
+
+    if all_errors:
+        _print_errors(all_errors, label="FAILED", color=_red)
         return 1
     print("OK")
     return 0
 
 
-def _print_errors(errors: list[_Error]) -> None:
+def _print_errors(
+    errors: list[_Error],
+    *,
+    label: str = "FAILED",
+    color=_red,
+) -> None:
     total = len(errors)
     print(
-        f"\n{_bold(_red('FAILED:'))} {_bold(str(total))} error(s) across "
+        f"\n{_bold(color(label + ':'))} {_bold(str(total))} issue(s) across "
         f"{len({e[0] for e in errors})} project(s):\n",
         file=sys.stderr,
     )
@@ -362,7 +473,7 @@ def _print_errors(errors: list[_Error]) -> None:
         proj_count = sum(len(v) for v in categories.values())
         print(
             f"  {_bold(_yellow(project))}  "
-            f"{_dim(f'({proj_count} error(s))')}",
+            f"{_dim(f'({proj_count} issue(s))')}",
             file=sys.stderr,
         )
         for category, msgs in sorted(categories.items()):

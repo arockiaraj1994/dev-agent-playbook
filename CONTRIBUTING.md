@@ -11,20 +11,20 @@ This guide covers both. For copy-pasteable doc skeletons, see [`TEMPLATE.md`](TE
 
 ## Adding a new project ruleset
 
-Create a directory next to `mcp/`. The validator enforces the full layout —
-copy from `apache-camel/` for a known-good baseline.
+Create a directory next to `mcp/`. The validator enforces the full layout - 
+copy from `standards/apache-camel/` for a known-good baseline.
 
 ```
 my-project/
   README.md                          # humans
-  AGENTS.md                          # required — identity + behavior
+  AGENTS.md                          # required - identity + behavior
   INDEX.md                           # auto-generated trigger map (do not hand-edit)
   core/
-    guardrails.md                    # required — always-on MUST / MUST NOT
-    definition-of-done.md            # required — gates + functional + security
-    glossary.md                      # required — domain terms
+    guardrails.md                    # required - always-on MUST / MUST NOT
+    definition-of-done.md            # required - gates + functional + security
+    glossary.md                      # required - domain terms
   architecture/
-    overview.md                      # required — system overview
+    overview.md                      # required - system overview
     decisions/                       # ADRs (one .md per decision)
   languages/<lang>/                  # at least one with standards.md
     standards.md
@@ -32,13 +32,13 @@ my-project/
     anti-patterns.md
   patterns/<name>.md                 # canonical noun-named patterns
   skills/<action>.md                 # verb-noun playbooks
-  workflows/                         # required — all four flows
+  workflows/                         # required - all four flows
     new-feature.md
     bug-fix.md
     security-fix.md
     refactor.md
   gates/
-    README.md                        # required — what each gate enforces
+    README.md                        # required - what each gate enforces
     scripts/verify-<lang>.sh         # executable
 ```
 
@@ -53,7 +53,7 @@ Then restart any running MCP server.
 
 ---
 
-## Pattern vs Skill — the canonical rule
+## Pattern vs Skill - the canonical rule
 
 Authors frequently get this wrong. There is one rule:
 
@@ -78,16 +78,16 @@ The first line of every doc is its title. The MCP server uses the H1 as the doc'
 
 | Doc type | H1 format |
 |----------|-----------|
-| `AGENTS.md` | `# AGENTS.md — <Project> (<short stack>)` |
-| `core/guardrails.md` | `# Guardrails — <Project>` |
-| `core/definition-of-done.md` | `# Definition of Done — <Project>` |
-| `architecture/overview.md` | `# Architecture — <Project>` |
-| `architecture/decisions/<n>.md` | `# ADR <n> — <decision>` |
-| `languages/<lang>/<doc>.md` | `# <Language> <doc> — <Project>` |
-| `patterns/<name>.md` | `# Pattern: <Name> — <project context>` |
-| `skills/<action>.md` | `# Skill: <Action> — <when to use>` |
-| `workflows/<name>.md` | `# Workflow — <Name>` |
-| `gates/README.md` | `# Gates — <Project>` |
+| `AGENTS.md` | `# AGENTS.md - <Project> (<short stack>)` |
+| `core/guardrails.md` | `# Guardrails - <Project>` |
+| `core/definition-of-done.md` | `# Definition of Done - <Project>` |
+| `architecture/overview.md` | `# Architecture - <Project>` |
+| `architecture/decisions/<n>.md` | `# ADR <n> - <decision>` |
+| `languages/<lang>/<doc>.md` | `# <Language> <doc> - <Project>` |
+| `patterns/<name>.md` | `# Pattern: <Name> - <project context>` |
+| `skills/<action>.md` | `# Skill: <Action> - <when to use>` |
+| `workflows/<name>.md` | `# Workflow - <Name>` |
+| `gates/README.md` | `# Gates - <Project>` |
 
 ---
 
@@ -98,12 +98,12 @@ The MCP loader reads frontmatter when present and falls back to the H1 otherwise
 ```yaml
 ---
 title: Quarkus pattern for Karavan
-description: Canonical Quarkus structure — REST resources, services, CDI scopes.
+description: Canonical Quarkus structure - REST resources, services, CDI scopes.
 tags: [quarkus, java, cdi, rest]
 applies_to: [apache-camel]
 ---
 
-# Pattern: Quarkus — Apache Camel Karavan
+# Pattern: Quarkus - Apache Camel Karavan
 ...
 ```
 
@@ -116,34 +116,36 @@ Recognized fields:
 | `tags` | list of strings | Weighted 2× in BM25 search. |
 | `applies_to` | list of strings | Project scopes; informational for now. |
 | `triggers` | list of strings | Natural-language task triggers used by `start_task`, `find_rules`, and the `INDEX.md` generator. Workflows and skills should set this. |
-| `see_also` | list of strings | `<kind>:<name>` entries — rendered as `## Next Calls` on tool fetches. See below. |
+| `see_also` | list of strings | `<kind>:<name>` entries - rendered as `## Next Calls` on tool fetches. See below. |
 | `language` | string | Set automatically for `languages/<lang>/*.md`; can be set explicitly for other docs that target one language. |
 | `gates` | list of strings | On workflows: which `verify-*.sh` gate(s) close out the task. |
 
 Unknown keys are ignored. No frontmatter at all is fine, but workflows and
 skills without `triggers` won't be discoverable through `start_task`.
 
-### `see_also` — how a doc chains forward
+### `see_also` - how a doc chains forward
 
 Each entry is `<kind>:<name>`, and the server renders it as a literal tool
 call in a `## Next Calls` block appended to the doc. **A doc with no
-`see_also` is a dead end** — the agent reads it and has nowhere to go.
+`see_also` is a dead end** - the agent reads it and has nowhere to go.
 
 | Kind | Example | Renders as |
 |------|---------|------------|
 | `tool` | `tool:start_task` | `start_task(project=…, task=…)` |
-| `pattern` | `pattern:error-handling` | `get_pattern(…)` |
-| `skill` | `skill:debug-route` | `get_skill(…)` |
-| `workflow` | `workflow:bug-fix` | `get_workflow(…)` |
-| `gate` | `gate:verify-java` | `get_gate(…)` |
-| `language` | `language:java/standards` | `get_language_rules(…)` |
-| `architecture` | `architecture:0007-use-sftp` | `get_architecture(…)` |
-| `core` | `core:guardrails` | `get_guardrails(…)` |
+| `pattern` | `pattern:error-handling` | `get_doc(kind="pattern", name=…)` |
+| `skill` | `skill:debug-route` | `get_doc(kind="skill", name=…)` |
+| `workflow` | `workflow:bug-fix` | `get_doc(kind="workflow", name=…)` |
+| `gate` | `gate:verify-java` | `get_doc(kind="gate", name=…)` |
+| `language` | `language:java/standards` | `get_doc(kind="language", name="java", doc="standards")` |
+| `architecture` | `architecture:0007-use-sftp` | `get_doc(kind="architecture", name=…)` |
+| `core` | `core:guardrails` | `get_doc(kind="guardrails")` |
+| `requirement` | `requirement:ST-101` | `get_doc(kind="requirement", name="ST-101")` |
 
-Valid `tool:` names are `start_task`, `get_guardrails`, `find_rules`, and
-`list_projects`. Any other kind or tool name is a **validation error** —
-`validate-rules.py` rejects it, because an unrecognized entry renders as
-nothing at all and the dead link is otherwise invisible.
+Valid `tool:` names are `start_task`, `get_guardrails` / `get_doc`, `find_rules`,
+`list_projects`, `list_requirements`, and `start_requirement`. Any other kind
+or tool name is a **validation error** - `validate-rules.py` rejects it,
+because an unrecognized entry renders as nothing at all and the dead link is
+otherwise invisible.
 
 ---
 
@@ -151,7 +153,7 @@ nothing at all and the dead link is otherwise invisible.
 
 - Link to **`./core/glossary.md`** the first time a domain term appears in a doc.
 - When a pattern explicitly avoids an anti-pattern, link to the relevant `languages/<lang>/anti-patterns.md`.
-- Use `see_also:` frontmatter to wire up the `## Next Calls` chain — this is how AI agents move from a workflow to its skills and patterns without having to guess paths.
+- Use `see_also:` frontmatter to wire up the `## Next Calls` chain - this is how AI agents move from a workflow to its skills and patterns without having to guess paths.
 
 ---
 
@@ -183,5 +185,5 @@ When you change a tool's name or schema, bump the server version in `mcp/pyproje
 
 - Prefer **imperative voice** in rule docs ("Use Bean Validation", not "You should use Bean Validation").
 - No marketing language. AI agents and humans both prefer dense, scannable prose.
-- Short sections with explicit headings beat long flowing prose — the BM25 index weights headings higher.
+- Short sections with explicit headings beat long flowing prose - the BM25 index weights headings higher.
 - Code blocks should be runnable or near-runnable; avoid pseudocode unless it's clearly labeled.

@@ -70,12 +70,14 @@ def test_infer_doc_type_alias() -> None:
         (".git/HEAD", True),
         (".github/workflows/ci.yml", True),
         ("scripts/validate-rules.py", True),
-        # Per-project README.md is human-only — not indexed, not flagged.
+        # Per-project README.md is human-only - not indexed, not flagged.
         ("apache-camel/README.md", True),
         # Project rule docs are NOT excluded.
-        ("integration-manager/AGENTS.md", False),
-        ("baton-sso-config/patterns/foo.md", False),
+        ("nexre/AGENTS.md", False),
+        ("apache-camel/patterns/foo.md", False),
         ("apache-camel/INDEX.md", False),
+        ("standards/", True),
+        ("requirements/", True),
     ],
 )
 def test_is_excluded(rel: str, expected: bool) -> None:
@@ -213,9 +215,7 @@ def test_gate_doc_lists_scripts_in_metadata(tmp_rules_root: Path) -> None:
 def test_workflow_frontmatter_indexes_triggers_and_see_also(tmp_rules_root: Path) -> None:
     docs = _parse_docs(tmp_rules_root)
     wf = next(
-        d
-        for d in docs
-        if d.project == "proj-a" and d.relative_path == "workflows/bug-fix.md"
+        d for d in docs if d.project == "proj-a" and d.relative_path == "workflows/bug-fix.md"
     )
     assert wf.doc_type == "workflow"
     assert wf.metadata.get("triggers") == ["bug", "fix a bug", "debug"]

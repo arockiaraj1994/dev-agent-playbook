@@ -1,15 +1,15 @@
 """
-dashboard/routes.py — Starlette routes for the metrics UI.
+dashboard/routes.py - Starlette routes for the metrics UI.
 
 Sections:
-  /dashboard/                — users + adoption overview
-  /dashboard/tools           — tool popularity, latency, rule docs fetched
-  /dashboard/searches        — search query log + zero-result queries
-  /dashboard/activity        — recent calls (last 100)
-  /dashboard/users/{name}    — per-user drill-down
-  /dashboard/tokens          — MCP token management (all authenticated users)
-  /dashboard/users-admin     — user management (admin only)
-  /dashboard/static/...      — CSS
+  /dashboard/ - users + adoption overview
+  /dashboard/tools - tool popularity, latency, rule docs fetched
+  /dashboard/searches - search query log + zero-result queries
+  /dashboard/activity - recent calls (last 100)
+  /dashboard/users/{name} - per-user drill-down
+  /dashboard/tokens - MCP token management (all authenticated users)
+  /dashboard/users-admin - user management (admin only)
+  /dashboard/static/... - CSS
 
 Authentication is handled at the app level by AppAuthMiddleware. When
 auth.enabled is true the middleware rejects / redirects unauthenticated
@@ -67,7 +67,7 @@ def _parse_iso(value: str | None) -> datetime | None:
 def _since_filter(value: str | None) -> str:
     dt = _parse_iso(value)
     if dt is None:
-        return "—"
+        return " - "
     now = datetime.now(UTC)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
@@ -89,7 +89,7 @@ def _since_filter(value: str | None) -> str:
 def _short_dt_filter(value: str | None) -> str:
     dt = _parse_iso(value)
     if dt is None:
-        return "—"
+        return " - "
     return dt.strftime("%Y-%m-%d %H:%M")
 
 
@@ -101,12 +101,13 @@ def _short_dt_filter(value: str | None) -> str:
 def build_dashboard_routes(
     store: MetricsStore,
     inactive_days: int,
-    server_label: str = "dev-agent-playbook",
-    auth_store: "AuthStore | None" = None,
-    dashboard_session: "DashboardSession | None" = None,
+    server_label: str = "dev-playbook",
+    auth_store: AuthStore | None = None,
+    dashboard_session: DashboardSession | None = None,
     auth_enabled: bool = False,
-    rules_store: "RulesStore | None" = None,
+    rules_store: RulesStore | None = None,
     rules_root: Path | None = None,
+    requirements_cache: object | None = None,
 ) -> list[BaseRoute]:
     templates = _build_templates()
 
@@ -121,6 +122,7 @@ def build_dashboard_routes(
         if fresh:
             return fresh
         from session import DashboardSession as _DS
+
         return _DS.generate_csrf_token()
 
     def _validate_csrf_or_403(request: Request, form: dict) -> Response | None:
@@ -130,7 +132,7 @@ def build_dashboard_routes(
         cookie_val = dashboard_session.read_csrf_cookie(request.scope)
         form_val = str(form.get("_csrf", ""))
         if not dashboard_session.validate_csrf(cookie_val, form_val):
-            return HTMLResponse("403 Forbidden — invalid CSRF token.", status_code=403)
+            return HTMLResponse("403 Forbidden - invalid CSRF token.", status_code=403)
         return None
 
     def _ctx(request: Request, **extra: object) -> dict:
@@ -148,12 +150,13 @@ def build_dashboard_routes(
         }
 
     def _forbidden(request: Request) -> Response:
-        return HTMLResponse("<p>403 Forbidden — admin access required.</p>", status_code=403)
+        return HTMLResponse("<p>403 Forbidden - admin access required.</p>", status_code=403)
 
     # -- Read-only views -----------------------------------------------------
 
     async def dashboard_view(request: Request) -> Response:
         import json as _json
+
         summary = await store.dashboard_summary(inactive_days=inactive_days)
         calls = await store.list_recent_calls(limit=8)
         return templates.TemplateResponse(
@@ -185,7 +188,13 @@ def build_dashboard_routes(
         return templates.TemplateResponse(
             request,
             "tools.html",
-            _ctx(request, tool_stats=tool_stats, doc_fetches=doc_fetches, window_days=window_days, page="tools"),
+            _ctx(
+                request,
+                tool_stats=tool_stats,
+                doc_fetches=doc_fetches,
+                window_days=window_days,
+                page="tools",
+            ),
         )
 
     async def searches_view(request: Request) -> Response:
@@ -194,7 +203,9 @@ def build_dashboard_routes(
         return templates.TemplateResponse(
             request,
             "searches.html",
-            _ctx(request, recent_searches=recent, zero_result_searches=zero_result, page="searches"),
+            _ctx(
+                request, recent_searches=recent, zero_result_searches=zero_result, page="searches"
+            ),
         )
 
     async def activity_view(request: Request) -> Response:
@@ -222,18 +233,27 @@ def build_dashboard_routes(
         auth_token: str | None = None
         last_call: str | None = None
         principal = scope_principal(request.scope)
-        if auth_enabled and auth_store is not None and principal is not None and principal.user_id != "public":
+        if (
+            auth_enabled
+            and auth_store is not None
+            and principal is not None
+            and principal.user_id != "public"
+        ):
             all_tokens = await auth_store.list_tokens(principal.user_id)
             active = [t for t in all_tokens if t["active"]]
             if active:
                 auth_token = active[0]["token"]
         if principal is not None and principal.user_id != "public":
-            detail = await store.get_user(user_name=principal.user_name, inactive_days=inactive_days)
+            detail = await store.get_user(
+                user_name=principal.user_name, inactive_days=inactive_days
+            )
             if detail is not None:
                 last_call = detail.last_seen
         token_generated = bool(request.query_params.get("token_generated"))
         return templates.TemplateResponse(
-            request, "setup.html", _ctx(
+            request,
+            "setup.html",
+            _ctx(
                 request,
                 sse_url=sse_url,
                 page="setup",
@@ -241,29 +261,30 @@ def build_dashboard_routes(
                 auth_token=auth_token,
                 last_call=last_call,
                 token_generated=token_generated,
-            )
+            ),
         )
 
     async def guide_view(request: Request) -> Response:
-        return templates.TemplateResponse(
-            request, "guide.html", _ctx(request, page="guide")
-        )
+        return templates.TemplateResponse(request, "guide.html", _ctx(request, page="guide"))
 
-    # -- Projects (rule-corpus health) ---------------------------------------
+    # -- Standards + Requirements (corpus health) ----------------------------
 
     def _score_all_projects() -> list:
-        """Score every project the rules loader knows about. Returns a list
-        of ProjectStatus, in alphabetical order."""
+        """Score every standards project. Returns ProjectStatus list."""
         if rules_store is None or rules_root is None:
             return []
         from quality import score_project
-        return [
-            score_project(p, rules_store, rules_root / p)
-            for p in rules_store.projects()
-        ]
+
+        projects = (
+            rules_store.projects(corpus="standards")
+            if hasattr(rules_store, "projects")
+            else rules_store.projects()
+        )
+        return [score_project(p, rules_store, rules_root / p) for p in projects]
 
     async def projects_view(request: Request) -> Response:
         statuses = _score_all_projects()
+        linked = await store.requirement_linked_rate(window_days=30)
         return templates.TemplateResponse(
             request,
             "projects.html",
@@ -272,37 +293,257 @@ def build_dashboard_routes(
                 page="projects",
                 projects=statuses,
                 rules_loaded=rules_store is not None,
+                requirement_linked_pct=linked,
+                corpus="standards",
             ),
         )
+
+    async def requirements_view(request: Request) -> Response:
+        prd_rows = _requirement_rows()
+        projects = _requirement_project_rows(prd_rows)
+        linked = await store.requirement_linked_rate(window_days=30)
+        return templates.TemplateResponse(
+            request,
+            "requirements.html",
+            _ctx(
+                request,
+                page="requirements",
+                projects=projects,
+                rules_loaded=rules_store is not None,
+                requirement_linked_pct=linked,
+            ),
+        )
+
+    async def requirement_detail_view(request: Request) -> Response:
+        name = request.path_params.get("name", "")
+        if rules_store is None:
+            return HTMLResponse("<p>Rules store unavailable.</p>", status_code=503)
+        known = (
+            rules_store.projects(corpus="requirements")
+            if hasattr(rules_store, "projects")
+            else []
+        )
+        if name not in known:
+            return HTMLResponse(
+                f"<p>Requirements project <code>{name}</code> not found.</p>",
+                status_code=404,
+            )
+        prd_rows = [r for r in _requirement_rows() if r["project"] == name]
+        # Project-level indicator: worst of its PRDs.
+        if any(r["indicator"] == "red" for r in prd_rows):
+            indicator = "red"
+        elif any(r["indicator"] == "amber" for r in prd_rows):
+            indicator = "amber"
+        else:
+            indicator = "green"
+        return templates.TemplateResponse(
+            request,
+            "requirement_detail.html",
+            _ctx(
+                request,
+                page="requirements",
+                project=name,
+                prds=prd_rows,
+                indicator=indicator,
+            ),
+        )
+
+    def _requirement_project_rows(prd_rows: list[dict]) -> list[dict]:
+        """Aggregate per-PRD rows into Standards-style per-project rows."""
+        by_project: dict[str, list[dict]] = {}
+        for row in prd_rows:
+            by_project.setdefault(row["project"], []).append(row)
+
+        # Also surface requirements projects that have no PRDs yet.
+        if rules_store is not None and hasattr(rules_store, "projects"):
+            for name in rules_store.projects(corpus="requirements"):
+                by_project.setdefault(name, [])
+
+        out: list[dict] = []
+        for project in sorted(by_project):
+            rows = by_project[project]
+            counts = {"red": 0, "amber": 0, "green": 0}
+            story_total = 0
+            targets_ok = 0
+            targets_n = 0
+            for r in rows:
+                counts[r["indicator"]] = counts.get(r["indicator"], 0) + 1
+                story_total += int(r.get("story_total") or 0)
+                # Weight coverage by stories that declared targets.
+                cov = int(r.get("targets_coverage") or 0)
+                st = int(r.get("story_total") or 0)
+                if st:
+                    targets_n += st
+                    targets_ok += round(st * cov / 100)
+            if counts["red"]:
+                indicator = "red"
+            elif counts["amber"]:
+                indicator = "amber"
+            else:
+                indicator = "green"
+            coverage = round(100 * targets_ok / targets_n) if targets_n else 0
+            out.append(
+                {
+                    "project": project,
+                    "prd_total": len(rows),
+                    "story_total": story_total,
+                    "counts": counts,
+                    "indicator": indicator,
+                    "targets_coverage": coverage,
+                }
+            )
+        return out
+
+    def _requirement_rows() -> list[dict]:
+        if rules_store is None:
+            return []
+        from requirement_rules import validate_requirement_docs
+
+        prds = [d for d in rules_store.all_docs(corpus="requirements") if d.doc_type == "prd"]
+        standards = rules_store.all_docs(corpus="standards")
+        hard, soft = validate_requirement_docs(
+            rules_store.all_docs(corpus="requirements"), standards
+        )
+        issues_by_path: dict[str, list[str]] = {}
+        for _proj, _rule, msg in hard + soft:
+            # msg starts with relative_path:
+            path = msg.split(":", 1)[0].strip()
+            issues_by_path.setdefault(path, []).append(msg)
+
+        rows: list[dict] = []
+        for prd in sorted(prds, key=lambda d: d.name):
+            stories = rules_store.stories_of(prd)
+            status_counts = {"draft": 0, "approved": 0, "shipped": 0}
+            targets_ok = 0
+            targets_total = 0
+            for s in stories:
+                st = s.metadata.get("status") or "draft"
+                if isinstance(st, str) and st in status_counts:
+                    status_counts[st] += 1
+                else:
+                    status_counts["draft"] += 1
+                targets = s.metadata.get("targets") or []
+                if isinstance(targets, list) and targets:
+                    targets_total += 1
+                    # Consider covered if no soft failure mentioning this story path
+                    if not any(
+                        s.relative_path in m
+                        for m in issues_by_path.get(s.relative_path, [])
+                        if "targets" in m
+                    ):
+                        # simpler: count stories with non-empty targets as attempted
+                        targets_ok += 1
+            prd_issues = issues_by_path.get(prd.relative_path, [])
+            story_issues = [m for s in stories for m in issues_by_path.get(s.relative_path, [])]
+            all_issues = prd_issues + story_issues
+            if any(":" in m and m.split(":")[0] for m in all_issues) and any(
+                x[1].startswith("prd.") or x[1].startswith("story.")
+                for x in hard
+                if prd.relative_path in x[2] or any(s.relative_path in x[2] for s in stories)
+            ):
+                indicator = "red"
+            elif all_issues:
+                indicator = "amber"
+            else:
+                indicator = "green"
+
+            # Refine: hard failures → red, soft only → amber
+            has_hard = any(
+                prd.relative_path in x[2] or any(s.relative_path in x[2] for s in stories)
+                for x in hard
+            )
+            has_soft = any(
+                prd.relative_path in x[2] or any(s.relative_path in x[2] for s in stories)
+                for x in soft
+            )
+            if has_hard:
+                indicator = "red"
+            elif has_soft:
+                indicator = "amber"
+            else:
+                indicator = "green"
+
+            coverage = round(100 * targets_ok / targets_total) if targets_total else 0
+            owner = prd.metadata.get("owner") if isinstance(prd.metadata.get("owner"), str) else ""
+            title = (
+                prd.metadata.get("title")
+                if isinstance(prd.metadata.get("title"), str)
+                else prd.name
+            )
+            status = (
+                prd.metadata.get("status")
+                if isinstance(prd.metadata.get("status"), str)
+                else "draft"
+            )
+            rows.append(
+                {
+                    "id": prd.name,
+                    "title": title,
+                    "status": status,
+                    "owner": owner or " - ",
+                    "story_counts": status_counts,
+                    "story_total": len(stories),
+                    "indicator": indicator,
+                    "targets_coverage": coverage,
+                    "project": prd.project,
+                }
+            )
+        return rows
+
+    async def reload_requirements(request: Request) -> Response:
+        principal = scope_principal(request.scope)
+        if principal is None or getattr(principal, "role", "user") != "admin":
+            return _forbidden(request)
+        form = await request.form()
+        csrf_err = _validate_csrf_or_403(request, form)
+        if csrf_err:
+            return csrf_err
+        if requirements_cache is None or not hasattr(requirements_cache, "force_reload"):
+            return RedirectResponse("/dashboard/requirements?error=reload", status_code=303)
+        await requirements_cache.force_reload()  # type: ignore[union-attr]
+        return RedirectResponse("/dashboard/requirements?reloaded=1", status_code=303)
 
     async def project_detail_view(request: Request) -> Response:
         name = request.path_params.get("name", "")
         if rules_store is None or rules_root is None:
-            return HTMLResponse(
-                "<p>Rules store unavailable.</p>", status_code=503
-            )
-        if name not in rules_store.projects():
+            return HTMLResponse("<p>Rules store unavailable.</p>", status_code=503)
+        if (
+            name not in rules_store.projects(corpus="standards")
+            and name not in rules_store.projects()
+        ):
             return HTMLResponse(
                 f"<p>Project <code>{name}</code> not found.</p>",
                 status_code=404,
             )
         from quality import score_project
+
         status = score_project(name, rules_store, rules_root / name)
         # Group files by their top-level folder for display.
         groups: dict[str, list] = {}
         for fs in status.files:
-            head = fs.relative_path.split("/", 1)[0] if "/" in fs.relative_path else fs.relative_path
+            head = (
+                fs.relative_path.split("/", 1)[0] if "/" in fs.relative_path else fs.relative_path
+            )
             groups.setdefault(head, []).append(fs)
         # Stable ordering of groups.
         group_order = [
-            "AGENTS.md", "INDEX.md", "core", "architecture", "languages",
-            "patterns", "skills", "workflows", "gates",
+            "AGENTS.md",
+            "INDEX.md",
+            "core",
+            "architecture",
+            "languages",
+            "patterns",
+            "skills",
+            "workflows",
+            "gates",
         ]
+
         def _gkey(k: str) -> int:
             try:
                 return group_order.index(k)
             except ValueError:
                 return len(group_order)
+
         ordered_groups = [(k, groups[k]) for k in sorted(groups, key=_gkey)]
 
         return templates.TemplateResponse(
@@ -321,10 +562,12 @@ def build_dashboard_routes(
         if principal is None or principal.user_id == "public":
             return JSONResponse({"last_call": None, "user": None})
         detail = await store.get_user(user_name=principal.user_name, inactive_days=inactive_days)
-        return JSONResponse({
-            "last_call": detail.last_seen if detail else None,
-            "user": principal.user_name,
-        })
+        return JSONResponse(
+            {
+                "last_call": detail.last_seen if detail else None,
+                "user": principal.user_name,
+            }
+        )
 
     # -- MCP token management (all authenticated users) ----------------------
 
@@ -443,6 +686,9 @@ def build_dashboard_routes(
         Route("/guide", endpoint=guide_view, methods=["GET"]),
         Route("/projects", endpoint=projects_view, methods=["GET"]),
         Route("/projects/{name}", endpoint=project_detail_view, methods=["GET"]),
+        Route("/requirements", endpoint=requirements_view, methods=["GET"]),
+        Route("/requirements/{name}", endpoint=requirement_detail_view, methods=["GET"]),
+        Route("/reload", endpoint=reload_requirements, methods=["POST"]),
         Route("/api/me/last-call", endpoint=setup_last_call_api, methods=["GET"]),
         Route("/tokens", endpoint=tokens_view, methods=["GET"]),
         Route("/tokens/generate", endpoint=tokens_generate, methods=["POST"]),

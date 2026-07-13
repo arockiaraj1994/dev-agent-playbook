@@ -1,18 +1,15 @@
 """
-server.py — Dev Agent Playbook MCP Server (SSE only; read-only rules + usage metrics).
+server.py - Dev Playbook MCP Server (SSE only; read-only rules + usage metrics).
 
-Tools (11, all read-only):
-  - start_task           — THE entry point: identity + guardrails + workflow + next_calls
-  - list_projects
-  - find_rules           — list docs (no query) or BM25 search (with query)
-  - get_agents_md
-  - get_guardrails       — always-on rules
-  - get_architecture     — overview + ADRs
-  - get_language_rules   — per-language standards / testing / anti-patterns
-  - get_pattern
-  - get_skill
-  - get_workflow         — task-driven flows
-  - get_gate             — gate README + script listing/preview
+Tools (6, all read-only):
+ - start_task - THE entry point: identity + guardrails + workflow + next_calls
+                           (project optional; + optional requirement= for PRD/story tree walk)
+ - list_projects
+ - find_rules - list docs (no query) or BM25 search (with query); corpus= filter
+ - get_doc - unified fetch by kind= (agents|guardrails|architecture|language|
+                           pattern|skill|workflow|gate|requirement)
+ - list_requirements - catalogue PRDs/stories
+ - start_requirement - PM authoring bootstrap
 
 Run:
   uv run server.py
@@ -20,24 +17,28 @@ Run:
 Transport: HTTP + Server-Sent Events on MCP_PORT (default 3000).
 
 Auth model:
-  MCP paths  (/sse, /messages/)    — Bearer token, validated by identity.py
-  Dashboard  (/dashboard/*, /login) — HttpOnly cookie session, validated by session.py
+  MCP paths  (/sse, /messages/) - Bearer token, validated by identity.py
+  Dashboard  (/dashboard/*, /login) - HttpOnly cookie session, validated by session.py
   Public     (/auth/login, /healthz, /login GET/POST, /logout)
 
 Config (optional): config.toml next to server.py, or path in MCP_CONFIG.
-  [enable] auth — default false.
-  [admin] username / password — default admin (seeded on first run).
+  [enable] auth - default false.
+  [admin] username / password - default admin (seeded on first run).
+  Refuses to start with default admin/admin when MCP_HOST=0.0.0.0.
 
 Other env vars:
-  MCP_PORT           — HTTP port (default 3000)
-  MCP_HOST           — bind host (default 127.0.0.1; 0.0.0.0 for LAN)
-  MCP_DB_PATH        — sqlite DB (default <repo>/mcp/data/metrics.db)
-  MCP_INACTIVE_DAYS  — "inactive" threshold (default 2)
-  MCP_SNIPPET_SIZE   — search snippet size chars (default 300, 50–5000)
-  MCP_ADMIN_USER     — override default admin username (default: admin)
-  MCP_ADMIN_PASSWORD — override default admin password (default: admin)
+  MCP_PORT - HTTP port (default 3000)
+  MCP_HOST - bind host (default 127.0.0.1; 0.0.0.0 for LAN)
+  MCP_DB_PATH - sqlite DB (default <repo>/mcp/data/metrics.db)
+  MCP_INACTIVE_DAYS - "inactive" threshold (default 2)
+  MCP_SNIPPET_SIZE - search snippet size chars (default 300, 50 - 5000)
+  MCP_ADMIN_USER - override default admin username (default: admin)
+  MCP_ADMIN_PASSWORD - override default admin password (default: admin)
+  MCP_STANDARDS_ROOT - standards corpus root (default <repo>/standards)
+  MCP_REQUIREMENTS_ROOT - requirements corpus root (default <repo>/requirements)
+  MCP_REQUIREMENTS_TTL - requirements reload TTL seconds (default 300)
 
-Rules load from the parent of the mcp/ directory.
+Standards load from standards/; requirements from requirements/ (TTL-cached).
 """
 
 from __future__ import annotations
@@ -68,6 +69,8 @@ from starlette.routing import Mount, Route
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from auth import AuthStore
+from cache import CorpusCache
+from corpus import requirements_spec, standards_spec
 from dashboard.auth_routes import build_auth_routes
 from dashboard.routes import build_dashboard_routes
 from identity import (
@@ -78,15 +81,16 @@ from identity import (
     resolve_bearer_token,
     scope_principal,
 )
+from loader import DocStore, bootstrap_all, resolve_rules_root
 from metrics import MetricsStore, summarize_args
 from search import RulesSearchEngine
 from session import DashboardSession
 from tools import READ_ONLY
 from tools import docs as _docs_mod
 from tools import projects as _projects_mod
+from tools import requirements as _requirements_mod
 from tools import search_tool as _search_mod
 from tools import start_task as _start_task_mod
-from loader import RulesStore, bootstrap, resolve_rules_root
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -97,43 +101,65 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
-logger = logging.getLogger("dev-agent-playbook")
+logger = logging.getLogger("dev-playbook")
 
-SERVER_LABEL = os.getenv("MCP_SERVER_LABEL", "dev-agent-playbook")
-SERVER_VERSION = "0.5.0"
+SERVER_LABEL = os.getenv("MCP_SERVER_LABEL", "dev-playbook")
+SERVER_VERSION = "0.6.0"
 DEFAULT_PORT = 3000
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_INACTIVE_DAYS = 2
 _DEFAULT_DB_REL = Path("data") / "metrics.db"
 
 # ---------------------------------------------------------------------------
-# Startup — load rules + index
+# Startup - load both corpora + index
 # ---------------------------------------------------------------------------
 
-logger.info("Bootstrapping rules store...")
+logger.info("Bootstrapping standards + requirements stores...")
 try:
-    store: RulesStore = bootstrap()
+    store: DocStore = bootstrap_all()
 except FileNotFoundError as e:
     logger.error("%s", e)
     sys.exit(1)
 
-if not store.docs:
+if not store.all_docs(corpus="standards"):
     root = resolve_rules_root()
-    found_subdirs = sorted(
-        p.name
-        for p in root.iterdir()
-        if p.is_dir() and not p.name.startswith(".") and p.name != "mcp"
+    found_subdirs = (
+        sorted(p.name for p in root.iterdir() if p.is_dir() and not p.name.startswith("."))
+        if root.is_dir()
+        else []
     )
     hint = (
         f"Found subdirs but none had loadable .md rules: {found_subdirs}."
         if found_subdirs
-        else "No project subdirectories found. Expected: <project>/agents.md next to mcp/."
+        else "No project subdirectories found under standards/."
     )
-    logger.error("No markdown rule docs loaded under %s. %s", root, hint)
+    logger.error("No standards markdown docs loaded under %s. %s", root, hint)
     sys.exit(1)
 
+standards_cache = CorpusCache(standards_spec())
+standards_cache.load_sync()  # already loaded via bootstrap_all; sync snapshot
+# Prefer the docs already in `store` for standards; keep cache for policy symmetry.
+standards_cache._docs = store.all_docs(corpus="standards")  # noqa: SLF001
+
+requirements_cache = CorpusCache(requirements_spec())
+
+
+def _on_requirements_reload(_name: str, fresh: list) -> None:
+    store.replace_corpus("requirements", fresh)
+    engine.rebuild(store)
+
+
+requirements_cache._on_reload = _on_requirements_reload  # noqa: SLF001
+requirements_cache.load_sync()
+# Ensure store has the TTL-cache snapshot (same docs if root empty/identical).
+store.replace_corpus("requirements", requirements_cache.snapshot())
+
 engine: RulesSearchEngine = RulesSearchEngine(store)
-logger.info("Ready. Projects: %s", store.projects())
+logger.info(
+    "Ready. Standards projects: %s | Requirements projects: %s",
+    store.projects(corpus="standards"),
+    store.projects(corpus="requirements"),
+)
 
 # Set by build_app(). The MCP `Server` is module-scoped, so dispatch_tool /
 # _record_call (also module-scoped) read this through the module global rather
@@ -146,7 +172,13 @@ metrics_store: MetricsStore | None = None
 
 server = Server(SERVER_LABEL)
 
-_TOOL_MODULES = [_projects_mod, _start_task_mod, _docs_mod, _search_mod]
+_TOOL_MODULES = [
+    _projects_mod,
+    _start_task_mod,
+    _docs_mod,
+    _search_mod,
+    _requirements_mod,
+]
 
 
 @server.list_tools()
@@ -169,9 +201,20 @@ class _CallContext:
     doc_path: str | None = None
     top_result_path: str | None = None
     top_result_score: float | None = None
+    requirement_id: str | None = None
+    corpus: str | None = None
+
+
+async def _maybe_reload_requirements() -> None:
+    """TTL-refresh requirements and rebuild BM25 if the corpus swapped."""
+    before = id(requirements_cache.snapshot())
+    fresh = await requirements_cache.docs()
+    # CorpusCache calls on_reload only on actual reload; if TTL hit, no-op.
+    _ = before, fresh
 
 
 async def _dispatch_typed(name: str, arguments: dict, ctx: _CallContext) -> list[TextContent]:
+    await _maybe_reload_requirements()
     for mod in _TOOL_MODULES:
         result = await mod.dispatch(name, arguments, ctx, store, engine)
         if result is not None:
@@ -223,6 +266,8 @@ async def _record_call(name: str, args_summary: str, latency_ms: int, ctx: _Call
             doc_path=ctx.doc_path,
             top_result_path=ctx.top_result_path,
             top_result_score=ctx.top_result_score,
+            requirement_id=ctx.requirement_id,
+            corpus=ctx.corpus,
         )
     except Exception:  # noqa: BLE001
         logger.exception("Failed to record call metrics")
@@ -255,18 +300,14 @@ def editor_from_user_agent(ua: str | None) -> EditorInfo:
 
 def _editor_from_scope(scope: Scope) -> EditorInfo:
     headers = scope.get("headers") or []
-    custom = next(
-        (v.decode("latin-1") for k, v in headers if k.lower() == b"x-mcp-editor"), None
-    )
+    custom = next((v.decode("latin-1") for k, v in headers if k.lower() == b"x-mcp-editor"), None)
     if custom:
         parts = custom.split("/", 1)
         return EditorInfo(
             name=parts[0].strip().lower() or "unknown",
             version=parts[1].strip() if len(parts) > 1 else "",
         )
-    ua = next(
-        (v.decode("latin-1") for k, v in headers if k.lower() == b"user-agent"), None
-    )
+    ua = next((v.decode("latin-1") for k, v in headers if k.lower() == b"user-agent"), None)
     return editor_from_user_agent(ua)
 
 
@@ -329,7 +370,7 @@ def _initialization_options() -> InitializationOptions:
 
 
 # ---------------------------------------------------------------------------
-# AppAuthMiddleware — single path-aware middleware
+# AppAuthMiddleware - single path-aware middleware
 #
 # MCP paths  (/sse, /messages/)    → identity.resolve_bearer_token (Bearer)
 # Dashboard  (/dashboard/*, /login, /logout) → session.resolve_cookie (Cookie)
@@ -338,23 +379,23 @@ def _initialization_options() -> InitializationOptions:
 
 _MCP_PATH_PREFIXES = ("/sse", "/messages/")
 _DASHBOARD_PATH_PREFIXES = ("/dashboard",)
-# Login/logout are exact paths — `/dashboard` is the only prefix-matched route.
+# Login/logout are exact paths - `/dashboard` is the only prefix-matched route.
 _LOGIN_LOGOUT_PATHS = frozenset({"/login", "/logout"})
 # Exact public paths that never require any credential
-_PUBLIC_PATHS = frozenset([
-    "/",
-    "/auth/login",
-    "/auth/token",
-    "/healthz",
-    "/.well-known/oauth-protected-resource",
-    "/.well-known/oauth-authorization-server",
-])
+_PUBLIC_PATHS = frozenset(
+    [
+        "/",
+        "/auth/login",
+        "/auth/token",
+        "/healthz",
+        "/.well-known/oauth-protected-resource",
+        "/.well-known/oauth-authorization-server",
+    ]
+)
 
 
 def _is_dashboard_path(path: str) -> bool:
-    return path in _LOGIN_LOGOUT_PATHS or any(
-        path.startswith(p) for p in _DASHBOARD_PATH_PREFIXES
-    )
+    return path in _LOGIN_LOGOUT_PATHS or any(path.startswith(p) for p in _DASHBOARD_PATH_PREFIXES)
 
 
 def _inject_cookie_send(send: Send, cookie_header: tuple[bytes, bytes]) -> Send:
@@ -375,9 +416,9 @@ class AppAuthMiddleware:
     """
     Path-aware authentication middleware.
 
-    - MCP paths use Bearer token auth (identity.py).
-    - Dashboard paths use HttpOnly cookie session auth (session.py).
-    - Public paths pass through without any credential check.
+ - MCP paths use Bearer token auth (identity.py).
+ - Dashboard paths use HttpOnly cookie session auth (session.py).
+ - Public paths pass through without any credential check.
     """
 
     def __init__(
@@ -418,11 +459,10 @@ class AppAuthMiddleware:
             )
 
         # CSRF cookie: set on dashboard GET requests when not already present
-        is_dashboard_get = (
-            _is_dashboard_path(path) and scope.get("method", "GET") == "GET"
-        )
+        is_dashboard_get = _is_dashboard_path(path) and scope.get("method", "GET") == "GET"
         if is_dashboard_get and not self._session.read_csrf_cookie(scope):
             from session import DashboardSession as _DS
+
             csrf_token = _DS.generate_csrf_token()
             send = _inject_cookie_send(
                 send, self._session.csrf_cookie_header(csrf_token, secure=secure)
@@ -444,9 +484,7 @@ class AppAuthMiddleware:
 
         # MCP paths: Bearer token only
         if any(path.startswith(p) for p in _MCP_PATH_PREFIXES):
-            return await resolve_bearer_token(
-                scope, send, self._auth_store, self._auth_enabled
-            )
+            return await resolve_bearer_token(scope, send, self._auth_store, self._auth_enabled)
 
         # Dashboard + login/logout: cookie session
         if _is_dashboard_path(path):
@@ -464,18 +502,20 @@ class AppAuthMiddleware:
 
         if not self._auth_enabled:
             from identity import _anonymous_principal
+
             return _anonymous_principal(scope)
 
         principal = await self._session.resolve_cookie(scope)
         if principal is not None:
             # Store raw token so __call__ can slide the idle timeout on every response
             from session import _read_cookie as _rc
+
             raw_token = _rc(scope, "session")
             if raw_token:
                 scope.setdefault("state", {})["_session_token"] = raw_token
             return principal
 
-        # No valid session — redirect to /login preserving the original path
+        # No valid session - redirect to /login preserving the original path
         location = f"/login?next={path}"
         await send(
             {
@@ -545,7 +585,7 @@ def build_app(deps: AppDeps) -> Starlette:
     # -- JSON auth endpoints (MCP client token issuance) --------------------
 
     async def json_login_endpoint(request: Request) -> Response:
-        """POST /auth/login — JSON, public. Returns an MCP Bearer token."""
+        """POST /auth/login - JSON, public. Returns an MCP Bearer token."""
         try:
             body = await request.json()
         except Exception:
@@ -570,11 +610,15 @@ def build_app(deps: AppDeps) -> Starlette:
             user["id"], expires_in_days, token_type="mcp"
         )
         return JSONResponse(
-            {"token": token_data["token"], "role": user["role"], "expires_at": token_data["expires_at"]}
+            {
+                "token": token_data["token"],
+                "role": user["role"],
+                "expires_at": token_data["expires_at"],
+            }
         )
 
     async def generate_mcp_token_endpoint(request: Request) -> Response:
-        """POST /auth/token — JSON, requires valid MCP Bearer token."""
+        """POST /auth/token - JSON, requires valid MCP Bearer token."""
         principal = scope_principal(request.scope)
         if principal is None or principal.user_id == "public":
             return JSONResponse({"error": "authentication_required"}, status_code=401)
@@ -606,30 +650,42 @@ def build_app(deps: AppDeps) -> Starlette:
     # The MCP SDK pre-flights these on every SSE connection attempt.
 
     async def oauth_protected_resource(request: Request) -> Response:
-        """GET /.well-known/oauth-protected-resource — RFC 8707."""
+        """GET /.well-known/oauth-protected-resource - RFC 8707."""
         base = str(request.base_url).rstrip("/")
-        return JSONResponse({
-            "resource": base,
-            "authorization_servers": [base],
-            "bearer_methods_supported": ["header"],
-        })
+        return JSONResponse(
+            {
+                "resource": base,
+                "authorization_servers": [base],
+                "bearer_methods_supported": ["header"],
+            }
+        )
 
     async def oauth_authorization_server(request: Request) -> Response:
-        """GET /.well-known/oauth-authorization-server — RFC 8414."""
+        """GET /.well-known/oauth-authorization-server - RFC 8414."""
         base = str(request.base_url).rstrip("/")
-        return JSONResponse({
-            "issuer": base,
-            "token_endpoint": f"{base}/auth/login",
-            "token_endpoint_auth_methods_supported": ["none"],
-            "grant_types_supported": ["urn:ietf:params:oauth:grant-type:device_code"],
-            "response_types_supported": ["token"],
-            "scopes_supported": ["mcp"],
-        })
+        return JSONResponse(
+            {
+                "issuer": base,
+                "token_endpoint": f"{base}/auth/login",
+                "token_endpoint_auth_methods_supported": ["none"],
+                "grant_types_supported": ["urn:ietf:params:oauth:grant-type:device_code"],
+                "response_types_supported": ["token"],
+                "scopes_supported": ["mcp"],
+            }
+        )
 
     routes = [
         # OAuth discovery (must be public, before auth middleware intercepts)
-        Route("/.well-known/oauth-protected-resource", endpoint=oauth_protected_resource, methods=["GET"]),
-        Route("/.well-known/oauth-authorization-server", endpoint=oauth_authorization_server, methods=["GET"]),
+        Route(
+            "/.well-known/oauth-protected-resource",
+            endpoint=oauth_protected_resource,
+            methods=["GET"],
+        ),
+        Route(
+            "/.well-known/oauth-authorization-server",
+            endpoint=oauth_authorization_server,
+            methods=["GET"],
+        ),
         # Public JSON API for MCP clients
         Route("/auth/login", endpoint=json_login_endpoint, methods=["POST"]),
         Route("/auth/token", endpoint=generate_mcp_token_endpoint, methods=["POST"]),
@@ -652,6 +708,7 @@ def build_app(deps: AppDeps) -> Starlette:
                 auth_enabled=deps.cfg.auth_enabled,
                 rules_store=store,
                 rules_root=resolve_rules_root(),
+                requirements_cache=requirements_cache,
             ),
         ),
         Route("/", endpoint=_root_redirect, methods=["GET"]),
@@ -670,6 +727,7 @@ def build_app(deps: AppDeps) -> Starlette:
 
 async def _root_redirect(_request: Request) -> Response:
     from starlette.responses import RedirectResponse
+
     return RedirectResponse("/dashboard/", status_code=302)
 
 
@@ -705,6 +763,20 @@ async def _serve() -> None:
     port = _int_env("MCP_PORT", DEFAULT_PORT)
     host = os.environ.get("MCP_HOST", DEFAULT_HOST).strip() or DEFAULT_HOST
 
+    # Refuse default admin/admin when binding to all interfaces.
+    if (
+        host in ("0.0.0.0", "::")
+        and cfg.admin_username == "admin"
+        and cfg.admin_password == "admin"
+    ):
+        logger.error(
+            "Refusing to start: MCP_HOST=%s with default admin/admin credentials. "
+            "Set MCP_ADMIN_PASSWORD (and preferably MCP_ADMIN_USER) to a strong "
+            "value, or bind to 127.0.0.1.",
+            host,
+        )
+        sys.exit(1)
+
     db_path = _resolve_db_path()
     metrics = MetricsStore(db_path)
     await metrics.init()
@@ -719,7 +791,11 @@ async def _serve() -> None:
 
     logger.info(
         "Starting on http://%s:%d (auth=%s, inactive_days=%d, db=%s)",
-        host, port, cfg.auth_enabled, days, db_path,
+        host,
+        port,
+        cfg.auth_enabled,
+        days,
+        db_path,
     )
     config = uvicorn.Config(app, host=host, port=port, log_level="info")
     await uvicorn.Server(config).serve()

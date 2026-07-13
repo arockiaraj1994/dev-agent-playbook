@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ detail.user_name }} — {{ server_label }}{% endblock %}
+{% block title %}{{ detail.user_name }} - {{ server_label }}{% endblock %}
 {% block crumb %}<a href="/dashboard/users">Users</a>{% endblock %}
 {% block crumb_extra %}
   <span class="crumbs-sep">›</span>
@@ -96,7 +96,7 @@
             {% for c in detail.recent_calls %}
             <tr>
               <td class="muted">{{ c.created_at | since }}</td>
-              <td class="muted">{{ c.editor_name or "—" }}</td>
+              <td class="muted">{{ c.editor_name or " - " }}</td>
               <td><code>{{ c.tool_name }}</code></td>
               <td class="muted truncate">{{ c.args_summary }}</td>
               <td class="num">{{ c.latency_ms }}ms</td>
@@ -139,7 +139,7 @@
             {% for name, version, last_init in detail.editors %}
             <tr>
               <td><span class="editor-tag">{{ name }}</span></td>
-              <td class="muted mono">{{ version or "—" }}</td>
+              <td class="muted mono">{{ version or " - " }}</td>
               <td class="muted">{{ last_init | since }}</td>
             </tr>
             {% endfor %}

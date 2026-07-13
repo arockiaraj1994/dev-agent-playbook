@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Login — {{ server_label }}</title>
+  <title>Login - {{ server_label }}</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="/dashboard/static/style.css">
 
@@ -15,16 +15,16 @@
     body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--bg, #f9fafb); }
     .login-wrap { width: 100%; max-width: 400px; padding: 1.5rem; }
     .login-brand { display: flex; align-items: center; gap: .75rem; margin-bottom: 2rem; justify-content: center; }
-    .login-brand-mark { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, #6366f1, #4f46e5); display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; font-size: 1rem; }
-    .login-card { background: var(--surface, #fff); border: 1px solid var(--border, #e5e7eb); border-radius: 12px; padding: 2rem; box-shadow: 0 1px 6px rgba(0,0,0,.06); }
+    .login-brand-mark { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, var(--violet-500, #7C3AED), var(--violet-700, #5B21B6)); display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; font-size: 1rem; }
+    .login-card { background: var(--bg-elevated, #fff); border: 1px solid var(--border, #e6e4ec); border-radius: 12px; padding: 2rem; box-shadow: 0 1px 6px rgba(45,19,70,.06); }
     .login-title { font-size: 1.125rem; font-weight: 600; margin-bottom: .25rem; }
     .login-sub { font-size: .8125rem; color: var(--text-muted, #6b7280); margin-bottom: 1.75rem; }
     .field { display: flex; flex-direction: column; gap: .375rem; margin-bottom: 1rem; }
     .field label { font-size: .75rem; font-weight: 600; color: var(--text-muted, #6b7280); text-transform: uppercase; letter-spacing: .05em; }
-    .field input, .field select { padding: .5rem .75rem; border: 1px solid var(--border, #e5e7eb); border-radius: .5rem; background: var(--surface, #fff); font-size: .875rem; font-family: inherit; width: 100%; box-sizing: border-box; }
-    .field input:focus, .field select:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,.15); }
-    .btn-login { width: 100%; padding: .625rem 1rem; background: #6366f1; color: #fff; border: none; border-radius: .5rem; font-size: .9375rem; font-weight: 600; cursor: pointer; margin-top: .5rem; font-family: inherit; }
-    .btn-login:hover { background: #4f46e5; }
+    .field input, .field select { padding: .5rem .75rem; border: 1px solid var(--border, #e6e4ec); border-radius: .5rem; background: var(--bg-elevated, #fff); font-size: .875rem; font-family: inherit; width: 100%; box-sizing: border-box; }
+    .field input:focus, .field select:focus { outline: none; border-color: var(--violet-500, #7C3AED); box-shadow: 0 0 0 2px rgba(124,58,237,.18); }
+    .btn-login { width: 100%; padding: .625rem 1rem; background: var(--violet-500, #7C3AED); color: #fff; border: none; border-radius: .5rem; font-size: .9375rem; font-weight: 600; cursor: pointer; margin-top: .5rem; font-family: inherit; }
+    .btn-login:hover { background: var(--violet-600, #6D28D9); }
     .error-box { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.25); border-radius: .5rem; padding: .625rem .875rem; font-size: .8125rem; color: #dc2626; margin-bottom: 1.25rem; display: flex; gap: .5rem; align-items: flex-start; }
     .login-footer { text-align: center; font-size: .75rem; color: var(--text-subtle, #9ca3af); margin-top: 1.5rem; }
   </style>

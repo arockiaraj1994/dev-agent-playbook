@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — {{ server_label }}{% endblock %}
+{% block title %}Dashboard - {{ server_label }}{% endblock %}
 {% block crumb %}Dashboard{% endblock %}
 
 {% block content %}
@@ -53,7 +53,7 @@
           {{ summary.calls_trend }}%
         </span>
       {% else %}
-        <span class="kpi-trend">—</span>
+        <span class="kpi-trend"> - </span>
       {% endif %}
       <span>vs yesterday</span>
     </div>
@@ -108,7 +108,7 @@
   <div class="panel">
     <div class="panel-header">
       <div>
-        <h2 class="panel-title">Tool calls — last 24 hours</h2>
+        <h2 class="panel-title">Tool calls - last 24 hours</h2>
         <div class="panel-sub">Hourly volume by status</div>
       </div>
       <div class="legend">
@@ -117,7 +117,7 @@
       </div>
     </div>
     <div class="panel-body">
-      <div id="chart-hourly" style="width:100%;height:240px"></div>
+      <div id="chart-hourly" class="chart-host"></div>
     </div>
   </div>
 
@@ -132,7 +132,7 @@
     </div>
     <div class="panel-body flush">
       {% if not summary.live_users %}
-        <div class="empty" style="margin:16px">No active connections right now.</div>
+        <div class="empty" style="margin:12px">No active connections right now.</div>
       {% else %}
       <div class="live-list">
         {% for u in summary.live_users %}
@@ -171,7 +171,7 @@
     </div>
     <div class="panel-body flush">
       {% if not summary.top_tools %}
-        <div class="empty" style="margin:16px">No tool calls in the last 24h.</div>
+        <div class="empty" style="margin:8px">No tool calls in the last 24h.</div>
       {% else %}
         {% for t in summary.top_tools %}
         <div class="bar-row">
@@ -198,7 +198,7 @@
       </div>
     </div>
     <div class="panel-body">
-      <div id="chart-daily" style="width:100%;height:220px"></div>
+      <div id="chart-daily" class="chart-host chart-host--daily"></div>
     </div>
   </div>
 
@@ -218,7 +218,7 @@
   </div>
   <div class="panel-body flush">
     {% if not calls %}
-      <div class="empty" style="margin:16px">No tool calls recorded yet.</div>
+      <div class="empty" style="margin:8px">No tool calls recorded yet.</div>
     {% else %}
     <table class="grid">
       <thead>
@@ -239,7 +239,7 @@
               <a href="/dashboard/users/{{ c.user_name }}">{{ c.user_name }}</a>
             </div>
           </td>
-          <td class="muted">{{ c.editor_name or "—" }}</td>
+          <td class="muted">{{ c.editor_name or " - " }}</td>
           <td><code>{{ c.tool_name }}</code></td>
           <td class="muted truncate">{{ c.args_summary }}</td>
           <td class="num">{{ c.latency_ms }}ms</td>
@@ -290,15 +290,20 @@ var DAILY  = {{ daily_json | safe }};
   function drawAreaLine(containerId, data, series, height) {
     var wrap = document.getElementById(containerId);
     if (!wrap) return;
-    var pad = { l: 36, r: 12, t: 12, b: 28 };
-    var width = wrap.offsetWidth || 600;
+    var pad = { l: 32, r: 8, t: 8, b: 22 };
+    var width = Math.max(wrap.clientWidth || wrap.offsetWidth || 600, 120);
+    height = Math.max(wrap.clientHeight || height || 180, 120);
     var innerW = Math.max(50, width - pad.l - pad.r);
-    var innerH = height - pad.t - pad.b;
+    var innerH = Math.max(40, height - pad.t - pad.b);
 
     var allVals = [];
     series.forEach(function (s) { data.forEach(function (d) { allVals.push(d[s.key] || 0); }); });
     var maxV = Math.max.apply(null, allVals.concat([1]));
-    var niceMax = Math.ceil(maxV / 50) * 50 || 50;
+    /* Scale to data, not a fixed 50-bucket - avoids a tall empty chart */
+    var niceMax = maxV <= 5 ? 5
+      : maxV <= 10 ? 10
+      : maxV <= 20 ? 20
+      : Math.ceil(maxV / 5) * 5;
     var yTicks = 4;
 
     var stepX = innerW / (data.length - 1 || 1);
@@ -329,9 +334,9 @@ var DAILY  = {{ daily_json | safe }};
     data.forEach(function (d, i) {
       if (i % 4 !== 0) return;
       var lbl = svgEl('text', {
-        x: toX(i), y: height - 8, 'font-size': '10.5',
-        fill: 'var(--text-subtle)', 'text-anchor': 'middle',
-        'font-family': 'var(--font-mono)'
+        x: toX(i), y: height - 4, 'font-size': '11',
+        fill: 'var(--text-muted)', 'text-anchor': 'middle',
+        'font-family': 'var(--font-sans)'
       });
       lbl.textContent = String(d.h || i).padStart(2, '0') + ':00';
       svg.appendChild(lbl);
@@ -361,16 +366,20 @@ var DAILY  = {{ daily_json | safe }};
   function drawStackedBars(containerId, data, keys, colors, height) {
     var wrap = document.getElementById(containerId);
     if (!wrap) return;
-    var pad = { l: 36, r: 12, t: 12, b: 28 };
-    var width = wrap.offsetWidth || 400;
+    var pad = { l: 32, r: 8, t: 8, b: 22 };
+    var width = Math.max(wrap.clientWidth || wrap.offsetWidth || 400, 120);
+    height = Math.max(wrap.clientHeight || height || 120, 100);
     var innerW = Math.max(50, width - pad.l - pad.r);
-    var innerH = height - pad.t - pad.b;
+    var innerH = Math.max(40, height - pad.t - pad.b);
 
     var totals = data.map(function (d) {
       return keys.reduce(function (s, k) { return s + (d[k] || 0); }, 0);
     });
     var maxV = Math.max.apply(null, totals.concat([1]));
-    var niceMax = Math.ceil(maxV / 100) * 100 || 100;
+    var niceMax = maxV <= 5 ? 5
+      : maxV <= 10 ? 10
+      : maxV <= 20 ? 20
+      : Math.ceil(maxV / 5) * 5 || 5;
     var yTicks = 4;
 
     var bandW = innerW / data.length;
@@ -409,8 +418,9 @@ var DAILY  = {{ daily_json | safe }};
         }));
       });
       var lbl = svgEl('text', {
-        x: cx, y: height - 8, 'font-size': '10.5',
-        fill: 'var(--text-subtle)', 'text-anchor': 'middle'
+        x: cx, y: height - 4, 'font-size': '11',
+        fill: 'var(--text-muted)', 'text-anchor': 'middle',
+        'font-family': 'var(--font-sans)'
       });
       lbl.textContent = d.label || '';
       svg.appendChild(lbl);
@@ -425,12 +435,12 @@ var DAILY  = {{ daily_json | safe }};
     drawAreaLine('chart-hourly', HOURLY, [
       { key: 'ok',  stroke: 'var(--indigo-500)', fill: 'var(--indigo-100)' },
       { key: 'err', stroke: 'var(--red-500)',    fill: 'var(--red-100)' }
-    ], 240);
+    ], 180);
 
     drawStackedBars('chart-daily', DAILY,
       ['list', 'get', 'search'],
       ['var(--indigo-100)', 'var(--indigo-300)', 'var(--indigo-500)'],
-      220);
+      120);
   }
 
   /* Render once on load, re-render on resize */

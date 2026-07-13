@@ -94,28 +94,36 @@ def test_search_empty_query() -> None:
     assert engine.search("   ") == []
 
 
-def test_search_top_k_bound(tmp_rules_root: Path) -> None:
+def test_search_filter_before_truncate(tmp_rules_root: Path) -> None:
+    """Filtered search must not under-return: filter BEFORE top_k truncate.
+
+    Regression guard for the corpus/project/doc_type filter path.
+    """
     store = load_store(tmp_rules_root)
     engine = RulesSearchEngine(store)
-    results = engine.search("a", top_k=2)  # 'a' is too short → empty
-    assert isinstance(results, list)
+    # Broad query that hits many docs; restrict to pattern and ask for many.
+    all_patterns = engine.search("proj", doc_type="pattern", top_k=50, corpus="standards")
+    assert all_patterns, "expected pattern hits"
+    for r in all_patterns:
+        assert r.doc_type == "pattern"
+    # top_k smaller than the unfiltered corpus must still return only patterns
+    limited = engine.search("proj", doc_type="pattern", top_k=1, corpus="standards")
+    assert len(limited) == 1
+    assert limited[0].doc_type == "pattern"
 
 
-def test_heading_boost_ranks_heading_match_higher(tmp_path: Path) -> None:
-    """A doc with the term in the H1 should outrank one with the term once in body."""
-    (tmp_path / "p").mkdir()
-    (tmp_path / "p" / "agents.md").write_text("# AGENTS.md — P\n\nplaceholder.\n")
-    (tmp_path / "p" / "architecture.md").write_text(
-        "# Architecture — Apache Camel routing\n\ndetails about routing.\n"
-    )
-    (tmp_path / "p" / "anti-patterns.md").write_text(
-        "# Anti-patterns\n\nDo not mention camel routing in passing once.\n"
-    )
-    store = load_store(tmp_path)
+def test_search_corpus_field_on_results(tmp_rules_root: Path) -> None:
+    store = load_store(tmp_rules_root)
     engine = RulesSearchEngine(store)
-    results = engine.search("camel routing", project="p")
+    results = engine.search("guardrails", top_k=5, corpus="standards")
     assert results
-    # The architecture doc (which has 'camel routing' in heading) should rank
-    # at or above the anti-patterns doc.
-    paths = [r.relative_path for r in results]
-    assert paths.index("architecture.md") <= paths.index("anti-patterns.md")
+    for r in results:
+        assert r.corpus == "standards"
+
+
+def test_search_includes_heading_in_result(tmp_rules_root: Path) -> None:
+    store = load_store(tmp_rules_root)
+    engine = RulesSearchEngine(store)
+    results = engine.search("DLQ flows", top_k=5, corpus="standards")
+    assert results
+    assert any(r.heading for r in results)

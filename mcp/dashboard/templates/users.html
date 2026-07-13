@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Users — {{ server_label }}{% endblock %}
+{% block title %}Users - {{ server_label }}{% endblock %}
 {% block crumb %}Users &amp; adoption{% endblock %}
 
 {% block content %}
@@ -85,7 +85,7 @@
                 {% endfor %}
               </div>
             {% else %}
-              <span class="muted">—</span>
+              <span class="muted"> - </span>
             {% endif %}
           </td>
           <td class="muted">{{ u.first_seen | short_dt }}</td>

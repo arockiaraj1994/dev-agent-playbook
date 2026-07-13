@@ -1,8 +1,7 @@
-"""Tests for session.py — DashboardSession: cookie management and CSRF."""
+"""Tests for session.py - DashboardSession: cookie management and CSRF."""
 
 from __future__ import annotations
 
-import secrets
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -10,16 +9,13 @@ import pytest
 
 from session import DashboardSession, _build_cookie, _expires_to_max_age, _read_cookie
 
-
 # ---------------------------------------------------------------------------
 # Cookie helpers
 # ---------------------------------------------------------------------------
 
 
 def test_read_cookie_present() -> None:
-    scope = {
-        "headers": [(b"cookie", b"session=abc123; other=xyz")]
-    }
+    scope = {"headers": [(b"cookie", b"session=abc123; other=xyz")]}
     assert _read_cookie(scope, "session") == "abc123"
 
 
@@ -66,7 +62,7 @@ def test_build_cookie_secure() -> None:
 
 
 # ---------------------------------------------------------------------------
-# DashboardSession — session cookie
+# DashboardSession - session cookie
 # ---------------------------------------------------------------------------
 
 

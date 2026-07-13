@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Setup — {{ server_label }}{% endblock %}
+{% block title %}Setup - {{ server_label }}{% endblock %}
 {% block crumb %}Setup{% endblock %}
 
 {% block content %}
@@ -20,7 +20,7 @@
   >
     <span class="pill-dot"></span>
     <span class="pill-label">
-      {% if last_call %}Connected — last call <span class="pill-rel">{{ last_call|since }}</span>{% else %}Waiting for first call…{% endif %}
+      {% if last_call %}Connected - last call <span class="pill-rel">{{ last_call|since }}</span>{% else %}Waiting for first call…{% endif %}
     </span>
   </div>
 </div>
@@ -28,7 +28,7 @@
 {% if token_generated %}
 <div class="callout-success" role="status">
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-  <div>Token generated. The snippets below are now pre-filled — copy one and paste it into your editor.</div>
+  <div>Token generated. The snippets below are now pre-filled - copy one and paste it into your editor.</div>
 </div>
 {% endif %}
 
@@ -71,7 +71,7 @@
       {% elif auth_enabled and auth_token %}
       <div class="callout-success">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-        <div>Your token is <strong>pre-filled</strong> in the snippets below. Treat it like a password — don't share it or commit it to source control. Manage it on the <a href="/dashboard/tokens"><strong>Tokens</strong></a> page.</div>
+        <div>Your token is <strong>pre-filled</strong> in the snippets below. Treat it like a password - don't share it or commit it to source control. Manage it on the <a href="/dashboard/tokens"><strong>Tokens</strong></a> page.</div>
       </div>
       {% else %}
       <div class="callout">
@@ -84,7 +84,7 @@
     <!-- Connect an editor -->
     <section class="doc-section" id="editors">
       <h2>Connect an editor</h2>
-      <p class="lede">Pick your editor below. After connecting, restart it and trigger any tool call — the status pill at the top of this page will flip to <span class="badge green"><span class="badge-dot"></span>connected</span>.</p>
+      <p class="lede">Pick your editor below. After connecting, restart it and trigger any tool call - the status pill at the top of this page will flip to <span class="badge green"><span class="badge-dot"></span>connected</span>.</p>
 
       <div class="tab-row" id="editor-tabs" role="tablist" aria-label="Editor configuration">
         <div class="tab active" data-tab="claude" role="tab" id="editor-tab-claude" aria-controls="tab-claude" aria-selected="true" tabindex="0">
@@ -104,7 +104,7 @@
       <!-- Claude Code -->
       <div class="tab-panel" id="tab-claude" role="tabpanel" aria-labelledby="editor-tab-claude">
         <h3>1. Add the server (one line)</h3>
-        <p>Run once in your terminal — this writes to your user-level Claude Code config:</p>
+        <p>Run once in your terminal - this writes to your user-level Claude Code config:</p>
         <div class="code-wrap">
 {% if auth_enabled %}<pre class="code-block">claude mcp add --transport sse {{ server_label }} {{ sse_url }} --header "Authorization: Bearer {{ token_val }}"</pre>{% else %}<pre class="code-block">claude mcp add --transport sse {{ server_label }} {{ sse_url }}</pre>{% endif %}
           <button class="code-copy" type="button">copy</button>
@@ -207,9 +207,9 @@ claude mcp add-json {{ server_label }} --scope project '{"type":"sse","url":"{{ 
       <h2>Verify it works</h2>
       <ol class="checklist">
         <li>Restart your editor after adding the MCP server.</li>
-        <li>Ask your AI: <em>"list available projects"</em> — you should see the project names returned from this server.</li>
-        <li>Ask your AI: <em>"start_task on apache-camel for fixing a bug in the SFTP route"</em> — you should see guardrails + the matched <code>bug-fix</code> workflow + a <strong>Next Calls</strong> list pointing at related skills and patterns.</li>
-        <li>Watch the pill at the top of this page — it flips to <span class="badge green"><span class="badge-dot"></span>connected</span> within a few seconds of your first call.</li>
+        <li>Ask your AI: <em>"list available projects"</em> - you should see the project names returned from this server.</li>
+        <li>Ask your AI: <em>"start_task on apache-camel for fixing a bug in the SFTP route"</em> - you should see guardrails + the matched <code>bug-fix</code> workflow + a <strong>Next Calls</strong> list pointing at related skills and patterns.</li>
+        <li>Watch the pill at the top of this page - it flips to <span class="badge green"><span class="badge-dot"></span>connected</span> within a few seconds of your first call.</li>
       </ol>
       <div class="callout">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
@@ -224,7 +224,7 @@ claude mcp add-json {{ server_label }} --scope project '{"type":"sse","url":"{{ 
 
 {% block page_script %}
 <script>
-/* Editor tabs — accessible (click + arrow keys) */
+/* Editor tabs - accessible (click + arrow keys) */
 (function () {
   var row = document.getElementById('editor-tabs');
   if (!row) return;
@@ -284,7 +284,7 @@ claude mcp add-json {{ server_label }} --scope project '{"type":"sse","url":"{{ 
   window.addEventListener('scroll', onScroll);
 })();
 
-/* Live verify pill — poll /dashboard/api/me/last-call every 5 s */
+/* Live verify pill - poll /dashboard/api/me/last-call every 5 s */
 (function () {
   var pill = document.getElementById('connect-status');
   if (!pill) return;
@@ -306,7 +306,7 @@ claude mcp add-json {{ server_label }} --scope project '{"type":"sse","url":"{{ 
   function render(iso) {
     if (iso) {
       pill.classList.add('is-active');
-      label.innerHTML = 'Connected — last call <span class="pill-rel">' + fmtSince(iso) + '</span>';
+      label.innerHTML = 'Connected - last call <span class="pill-rel">' + fmtSince(iso) + '</span>';
       pill.dataset.lastCall = iso;
     } else {
       pill.classList.remove('is-active');

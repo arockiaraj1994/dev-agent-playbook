@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Tools — {{ server_label }}{% endblock %}
+{% block title %}Tools - {{ server_label }}{% endblock %}
 {% block crumb %}Tools &amp; rule popularity{% endblock %}
 
 {% block content %}
@@ -7,7 +7,7 @@
 <div class="page-header">
   <div>
     <h1 class="page-title">Tools &amp; rule popularity</h1>
-    <p class="page-sub">Which MCP tools and rule docs your team relies on — last {{ window_days }}d</p>
+    <p class="page-sub">Which MCP tools and rule docs your team relies on - last {{ window_days }}d</p>
   </div>
   <div class="page-actions">
     <div class="chip-row">
@@ -34,7 +34,7 @@
     {% if tool_stats %}
     <div class="kpi-value">{{ ((tool_stats | sum(attribute='p50_latency_ms')) / tool_count) | round(0) | int }}<span class="muted" style="font-size:14px;font-weight:400">ms</span></div>
     {% else %}
-    <div class="kpi-value" style="color:var(--text-subtle)">—</div>
+    <div class="kpi-value" style="color:var(--text-subtle)"> - </div>
     {% endif %}
   </div>
   <div class="kpi">
@@ -42,7 +42,7 @@
     {% if tool_stats %}
     <div class="kpi-value">{{ ((tool_stats | sum(attribute='p95_latency_ms')) / tool_count) | round(0) | int }}<span class="muted" style="font-size:14px;font-weight:400">ms</span></div>
     {% else %}
-    <div class="kpi-value" style="color:var(--text-subtle)">—</div>
+    <div class="kpi-value" style="color:var(--text-subtle)"> - </div>
     {% endif %}
   </div>
   <div class="kpi">
@@ -62,7 +62,7 @@
 <div class="panel">
   <div class="panel-header">
     <div>
-      <h2 class="panel-title">Tool calls — last {{ window_days }}d</h2>
+      <h2 class="panel-title">Tool calls - last {{ window_days }}d</h2>
       <div class="panel-sub">By tool name</div>
     </div>
   </div>
@@ -118,7 +118,7 @@
   <div class="panel-header">
     <div>
       <h2 class="panel-title">Most fetched docs</h2>
-      <div class="panel-sub">get_* calls — last {{ window_days }}d</div>
+      <div class="panel-sub">get_* calls - last {{ window_days }}d</div>
     </div>
   </div>
   <div class="panel-body flush">

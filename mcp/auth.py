@@ -1,5 +1,5 @@
 """
-auth.py — In-built authentication store: users, roles, and opaque tokens.
+auth.py - In-built authentication store: users, roles, and opaque tokens.
 
 Schema (in the same SQLite DB as metrics):
   users(id, username, password_hash, role, created_at)
@@ -7,7 +7,7 @@ Schema (in the same SQLite DB as metrics):
 
 Roles: "admin" | "user"
 Token types: "mcp" (Bearer for editors) | "session" (HttpOnly cookie for dashboard)
-Tokens: secrets.token_urlsafe(32) — no expiry unless expires_in_days is set.
+Tokens: secrets.token_urlsafe(32) - no expiry unless expires_in_days is set.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ _HASH_ITERATIONS = 260_000
 
 
 # ---------------------------------------------------------------------------
-# Password hashing (stdlib only — pbkdf2-sha256 + random salt)
+# Password hashing (stdlib only - pbkdf2-sha256 + random salt)
 # ---------------------------------------------------------------------------
 
 
@@ -90,9 +90,7 @@ class AuthStore:
             # Migrate: add token_type column if it doesn't exist yet
             existing = {row[1] for row in conn.execute("PRAGMA table_info(tokens)").fetchall()}
             if "token_type" not in existing:
-                conn.execute(
-                    "ALTER TABLE tokens ADD COLUMN token_type TEXT NOT NULL DEFAULT 'mcp'"
-                )
+                conn.execute("ALTER TABLE tokens ADD COLUMN token_type TEXT NOT NULL DEFAULT 'mcp'")
 
     async def seed_default_admin(self, username: str, password: str) -> None:
         """Insert the default admin only when the users table is empty."""

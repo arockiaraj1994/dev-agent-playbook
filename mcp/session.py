@@ -1,13 +1,13 @@
 """
-session.py — Dashboard browser session management.
+session.py - Dashboard browser session management.
 
 Responsibility: HttpOnly cookie sessions and CSRF protection for /dashboard/*,
 /login, and /logout. Completely separate from MCP Bearer-token auth (identity.py).
 
 Cookie spec:
   Name:     session
-  HttpOnly: True   — JS cannot read it (XSS protection)
-  SameSite: Strict — blocks cross-site requests
+  HttpOnly: True - JS cannot read it (XSS protection)
+  SameSite: Strict - blocks cross-site requests
   Secure:   True when served over HTTPS
   Max-Age:  derived from token expires_at, omitted if Unlimited
   Path:     /
@@ -15,7 +15,7 @@ Cookie spec:
 CSRF spec (double-submit cookie pattern):
   csrf_token cookie (NOT HttpOnly, SameSite=Strict) set on GET requests.
   Every POST form includes <input type="hidden" name="_csrf" value="{{ csrf_token }}">.
-  Validated via secrets.compare_digest — constant-time comparison.
+  Validated via secrets.compare_digest - constant-time comparison.
 """
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ class DashboardSession:
     Instantiated once at startup and injected into route handlers that need it.
     """
 
-    def __init__(self, auth_store: "AuthStore") -> None:
+    def __init__(self, auth_store: AuthStore) -> None:
         self._auth_store = auth_store
 
     # -- Session cookie resolution -------------------------------------------
@@ -105,7 +105,7 @@ class DashboardSession:
     async def resolve_cookie(self, scope: Scope) -> Principal | None:
         """
         Read the session cookie and validate it against the AuthStore
-        (token_type="session"). Returns None if missing or invalid — the
+        (token_type="session"). Returns None if missing or invalid - the
         caller is responsible for sending a redirect to /login.
         """
         token = _read_cookie(scope, _SESSION_COOKIE)

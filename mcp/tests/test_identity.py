@@ -131,16 +131,16 @@ def test_editor_from_user_agent_unknown() -> None:
 
 
 # ---------------------------------------------------------------------------
-# AppAuthMiddleware — anonymous (auth off)
+# AppAuthMiddleware - anonymous (auth off)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_app_auth_middleware_anonymous(tmp_path) -> None:
     from auth import AuthStore
+    from identity import principal_var
     from server import AppAuthMiddleware
     from session import DashboardSession
-    from identity import principal_var
 
     auth_store = AuthStore(tmp_path / "auth.db")
     await auth_store.init()
@@ -180,7 +180,7 @@ async def test_app_auth_middleware_anonymous(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# AppAuthMiddleware — MCP path, auth on, no token → 401
+# AppAuthMiddleware - MCP path, auth on, no token → 401
 # ---------------------------------------------------------------------------
 
 
@@ -217,16 +217,16 @@ async def test_app_auth_middleware_mcp_no_token_returns_401(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# AppAuthMiddleware — MCP path, valid Bearer token → 204
+# AppAuthMiddleware - MCP path, valid Bearer token → 204
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_app_auth_middleware_valid_mcp_token(tmp_path) -> None:
     from auth import AuthStore
+    from identity import principal_var
     from server import AppAuthMiddleware
     from session import DashboardSession
-    from identity import principal_var
 
     auth_store = AuthStore(tmp_path / "auth.db")
     await auth_store.init()
@@ -270,7 +270,7 @@ async def test_app_auth_middleware_valid_mcp_token(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# AppAuthMiddleware — session token in Bearer header → 401 (type mismatch)
+# AppAuthMiddleware - session token in Bearer header → 401 (type mismatch)
 # ---------------------------------------------------------------------------
 
 
@@ -317,7 +317,7 @@ async def test_session_token_rejected_on_mcp_path(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# AppAuthMiddleware — /auth/login public path → no auth check
+# AppAuthMiddleware - /auth/login public path → no auth check
 # ---------------------------------------------------------------------------
 
 
@@ -359,7 +359,7 @@ async def test_public_path_bypasses_auth(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# AppAuthMiddleware — /dashboard with no cookie → 302 redirect to /login
+# AppAuthMiddleware - /dashboard with no cookie → 302 redirect to /login
 # ---------------------------------------------------------------------------
 
 

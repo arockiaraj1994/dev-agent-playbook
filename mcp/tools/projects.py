@@ -1,4 +1,4 @@
-"""tools/projects.py — list_projects tool.
+"""tools/projects.py - list_projects tool.
 
 Doc discovery lives in `find_rules` (tools/search_tool.py); this module only
 answers "what projects exist?".
@@ -39,7 +39,10 @@ async def dispatch(
     if name not in _NAMES:
         return None
 
-    projects = store.projects()
+    projects = store.projects(corpus="standards")
+    if not projects:
+        # Fall back: any corpus (legacy tests may only load one root)
+        projects = store.projects()
     if not projects:
         ctx.status = "empty"  # type: ignore[attr-defined]
         return [TextContent(type="text", text="No projects found in the rules repository.")]

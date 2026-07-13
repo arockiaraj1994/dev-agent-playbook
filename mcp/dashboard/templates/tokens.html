@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Tokens — {{ server_label }}{% endblock %}
+{% block title %}Tokens - {{ server_label }}{% endblock %}
 {% block crumb %}Tokens{% endblock %}
 
 {% block content %}
@@ -41,7 +41,7 @@
         <option value="10">10 Days</option>
       </select>
     </div>
-    <button type="submit" class="btn-primary" style="padding:.5rem 1.25rem;background:var(--accent,#6366f1);color:#fff;border:none;border-radius:.5rem;font-size:.875rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:.5rem">
+    <button type="submit" class="btn-primary" style="padding:.5rem 1.25rem;background:var(--accent,var(--violet-500));color:#fff;border:none;border-radius:.5rem;font-size:.875rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:.5rem">
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Generate Token
     </button>
@@ -116,7 +116,7 @@
         <button type="button"
                 onclick="copyToken('{{ t.token }}', this)"
                 title="Copy token to clipboard"
-                style="flex-shrink:0;padding:.375rem .875rem;background:var(--accent,#6366f1);color:#fff;border:none;border-radius:.375rem;cursor:pointer;display:inline-flex;align-items:center;gap:.375rem;font-size:.8125rem;font-weight:600;white-space:nowrap">
+                style="flex-shrink:0;padding:.375rem .875rem;background:var(--accent,var(--violet-500));color:#fff;border:none;border-radius:.375rem;cursor:pointer;display:inline-flex;align-items:center;gap:.375rem;font-size:.8125rem;font-weight:600;white-space:nowrap">
           <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
           Copy
         </button>
@@ -129,7 +129,7 @@
 
 {% else %}
 <div class="empty-state">
-  <p class="muted">No tokens yet — generate one above to connect your editor.</p>
+  <p class="muted">No tokens yet - generate one above to connect your editor.</p>
 </div>
 {% endif %}
 

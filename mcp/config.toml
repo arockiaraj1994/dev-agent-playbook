@@ -1,4 +1,4 @@
-# Dev Agent Playbook MCP — optional settings (see MCP_CONFIG to override path).
+# Dev Playbook MCP - optional settings (see MCP_CONFIG to override path).
 # When the file is missing, defaults match: enable.auth = false.
 
 [enable]

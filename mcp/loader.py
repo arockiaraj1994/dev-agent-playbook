@@ -1,73 +1,84 @@
 """
-loader.py — Loads all markdown rule docs from disk into memory.
+loader.py - Loads markdown docs from a corpus root into memory.
 
 Path-first dispatch: doc_type is inferred from the doc's path inside the
-project directory, not its filename alone. The supported layout per project:
+project directory, not its filename alone. Corpora are described by
+CorpusSpec (see corpus.py):
 
-    <project>/
-      AGENTS.md
-      INDEX.md
-      README.md                     (skipped — human-only)
-      core/{guardrails,definition-of-done,glossary}.md
-      architecture/overview.md
-      architecture/decisions/<n>.md
-      languages/<lang>/{standards,testing,anti-patterns}.md
-      patterns/<n>.md
-      skills/<n>.md
-      workflows/<n>.md
-      gates/README.md               (+ gates/scripts/*.sh — listed in metadata only)
+    standards/<project>/
+      AGENTS.md, INDEX.md, core/, architecture/, languages/, ...
 
-Optional YAML frontmatter is parsed (small dependency-free subset: scalar
-strings, inline list of strings).
+    requirements/<project>/
+      AGENTS.md, INDEX.md, workflows/, PRD-*/prd.md, PRD-*/stories/ST-*.md
 """
+
+from __future__ import annotations
 
 import logging
 import re
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from corpus import (
+    KNOWN_DOC_TYPES,
+    CorpusSpec,
+    infer_standards_type,
+    requirements_spec,
+    standards_spec,
+)
+
 logger = logging.getLogger(__name__)
 
+# Re-export for callers / validator
+__all__ = [
+    "KNOWN_DOC_TYPES",
+    "SEE_ALSO_KINDS",
+    "SEE_ALSO_TOOLS",
+    "SEE_ALSO_CORE",
+    "RuleDoc",
+    "RulesStore",
+    "DocStore",
+    "resolve_rules_root",
+    "resolve_standards_root",
+    "parse_corpus",
+    "_parse_docs",
+    "_parse_frontmatter",
+    "_infer_doc_type_and_name",
+    "_infer_doc_type",
+    "_is_excluded",
+    "load_store",
+    "bootstrap",
+    "bootstrap_all",
+]
+
 # ---------------------------------------------------------------------------
-# Config
+# Config / see_also
 # ---------------------------------------------------------------------------
 
 _MCP_DIR = Path(__file__).resolve().parent
-_DEFAULT_RULES_ROOT = _MCP_DIR.parent
+_REPO = _MCP_DIR.parent
 
-# Top-level dirs/files inside the rules repo that are not project rules.
-_EXCLUDED_PREFIXES = ("mcp/", ".git/", ".github/", "scripts/", ".venv/")
+# Legacy exclusions kept only for the back-compat shim path (repo-root walk).
+_EXCLUDED_PREFIXES = (
+    "mcp/",
+    ".git/",
+    ".github/",
+    "scripts/",
+    ".venv/",
+    "standards/",
+    "requirements/",
+    "docs/",
+)
 _EXCLUDED_TOP_LEVEL_FILES = {
     "README.md",
     "CONTRIBUTING.md",
     "TEMPLATE.md",
     "CHANGELOG.md",
 }
-
-# Files inside a project that are intentionally not indexed (human-only).
 _EXCLUDED_PROJECT_FILES = {"README.md"}
 
-
-# All recognized doc types. Used by tools and validators.
-KNOWN_DOC_TYPES = (
-    "agents",
-    "index",
-    "guardrails",
-    "definition-of-done",
-    "glossary",
-    "architecture",
-    "architecture-decision",
-    "language-rules",
-    "pattern",
-    "skill",
-    "workflow",
-    "gate",
-)
-
-
-# Recognized `<kind>` values in a doc's `see_also:` frontmatter. Entries whose
-# kind is not listed here render nothing, so validate-rules.py fails on them.
-# Lives here, not in tools/, so the validator can import it without `mcp`.
+# Recognized `<kind>` values in a doc's `see_also:` / `targets:` frontmatter.
 SEE_ALSO_KINDS = (
     "tool",
     "pattern",
@@ -78,17 +89,21 @@ SEE_ALSO_KINDS = (
     "language",
     "architecture",
     "core",
+    "agents",
+    "requirement",
 )
 
-# Valid `<name>` values for `see_also: [tool:<name>]`.
 SEE_ALSO_TOOLS = (
     "start_task",
     "get_guardrails",
+    "get_doc",
     "find_rules",
     "list_projects",
+    "list_requirements",
+    "get_requirement",  # legacy alias in frontmatter → renders as get_doc
+    "start_requirement",
 )
 
-# Valid `<name>` values for `see_also: [core:<name>]` — both map to get_guardrails.
 SEE_ALSO_CORE = ("guardrails", "definition-of-done")
 
 
@@ -105,29 +120,114 @@ class RuleDoc:
     name: str
     content: str
     metadata: dict = field(default_factory=dict)
+    corpus: str = "standards"
 
 
 @dataclass
-class RulesStore:
+class DocStore:
+    """Corpus-aware in-memory document store."""
+
     docs: list[RuleDoc] = field(default_factory=list)
 
-    def projects(self) -> list[str]:
-        return sorted({d.project for d in self.docs})
+    def projects(self, corpus: str | None = None) -> list[str]:
+        if corpus is None:
+            return sorted({d.project for d in self.docs})
+        return sorted({d.project for d in self.docs if d.corpus == corpus})
 
-    def get(self, project: str, relative_path: str) -> RuleDoc | None:
+    def get(
+        self,
+        project: str,
+        relative_path: str,
+        corpus: str | None = None,
+    ) -> RuleDoc | None:
         for doc in self.docs:
             if doc.project == project and doc.relative_path == relative_path:
+                if corpus is None or doc.corpus == corpus:
+                    return doc
+        return None
+
+    def for_project(self, project: str, corpus: str | None = None) -> list[RuleDoc]:
+        return [
+            d for d in self.docs if d.project == project and (corpus is None or d.corpus == corpus)
+        ]
+
+    def of_type(
+        self,
+        project: str,
+        doc_type: str,
+        corpus: str | None = None,
+    ) -> list[RuleDoc]:
+        return [
+            d
+            for d in self.docs
+            if d.project == project
+            and d.doc_type == doc_type
+            and (corpus is None or d.corpus == corpus)
+        ]
+
+    def all_docs(self, corpus: str | None = None) -> list[RuleDoc]:
+        if corpus is None:
+            return list(self.docs)
+        return [d for d in self.docs if d.corpus == corpus]
+
+    def find_by_id(
+        self,
+        corpus: str,
+        project: str,
+        req_id: str,
+    ) -> RuleDoc | None:
+        """Look up a PRD or story by frontmatter id (e.g. PRD-003 / ST-114)."""
+        req_id = req_id.strip()
+        for doc in self.docs:
+            if doc.corpus != corpus or doc.project != project:
+                continue
+            if doc.doc_type not in ("prd", "story"):
+                continue
+            meta_id = doc.metadata.get("id")
+            if isinstance(meta_id, str) and meta_id.strip() == req_id:
+                return doc
+            if doc.name == req_id:
                 return doc
         return None
 
-    def for_project(self, project: str) -> list[RuleDoc]:
-        return [d for d in self.docs if d.project == project]
+    def stories_of(self, prd: RuleDoc) -> list[RuleDoc]:
+        """Stories under the same PRD folder (path siblings)."""
+        if prd.doc_type != "prd":
+            return []
+        # relative_path like PRD-003-offline-sync/prd.md
+        folder = Path(prd.relative_path).parent.as_posix()
+        prefix = f"{folder}/stories/"
+        return sorted(
+            [
+                d
+                for d in self.docs
+                if d.corpus == prd.corpus
+                and d.project == prd.project
+                and d.doc_type == "story"
+                and d.relative_path.startswith(prefix)
+            ],
+            key=lambda d: d.name,
+        )
 
-    def of_type(self, project: str, doc_type: str) -> list[RuleDoc]:
-        return [d for d in self.docs if d.project == project and d.doc_type == doc_type]
+    def prd_of(self, story: RuleDoc) -> RuleDoc | None:
+        """Parent PRD via path arithmetic: ../../prd.md from stories/."""
+        if story.doc_type != "story":
+            return None
+        # PRD-003-offline-sync/stories/ST-114-*.md → PRD-003-offline-sync/prd.md
+        parts = Path(story.relative_path).parts
+        if len(parts) < 3:
+            return None
+        prd_rel = f"{parts[0]}/prd.md"
+        return self.get(story.project, prd_rel, corpus=story.corpus)
 
-    def all_docs(self) -> list[RuleDoc]:
-        return self.docs
+    def replace_corpus(self, corpus: str, fresh: list[RuleDoc]) -> None:
+        """Atomic swap of one corpus's docs (used by TTL cache)."""
+        others = [d for d in self.docs if d.corpus != corpus]
+        self.docs = others + fresh
+
+
+# Back-compat alias
+RulesStore = DocStore
 
 
 # ---------------------------------------------------------------------------
@@ -212,82 +312,20 @@ def _parse_frontmatter(content: str) -> tuple[dict, str]:
 
 
 # ---------------------------------------------------------------------------
-# Path-first doc-type inference
+# Path-first doc-type inference (standards - public alias)
 # ---------------------------------------------------------------------------
 
 
 def _infer_doc_type_and_name(relative_path: str) -> tuple[str, str]:
-    """
-    Infer (doc_type, name) from a path inside a project directory.
-
-    `name` is the canonical identifier callers pass to fetch tools (without
-    `.md`). For language-rules it is `<lang>/<doc>` (e.g. `java/standards`).
-
-    Returns ("other", <stem>) for paths that don't fit the layout — these
-    will be flagged as errors by the validator.
-    """
-    parts = Path(relative_path).parts
-    stem = Path(relative_path).stem
-
-    # Top-of-project files
-    if relative_path == "AGENTS.md":
-        return "agents", "agents"
-    if relative_path == "INDEX.md":
-        return "index", "index"
-
-    if len(parts) < 2:
-        return "other", stem
-
-    head = parts[0]
-
-    if head == "core":
-        if relative_path == "core/guardrails.md":
-            return "guardrails", "guardrails"
-        if relative_path == "core/definition-of-done.md":
-            return "definition-of-done", "definition-of-done"
-        if relative_path == "core/glossary.md":
-            return "glossary", "glossary"
-        return "other", stem
-
-    if head == "architecture":
-        if relative_path == "architecture/overview.md":
-            return "architecture", "overview"
-        if len(parts) >= 3 and parts[1] == "decisions":
-            return "architecture-decision", stem
-        return "other", stem
-
-    if head == "languages":
-        # languages/<lang>/<doc>.md
-        if len(parts) == 3:
-            lang = parts[1]
-            doc = stem
-            return "language-rules", f"{lang}/{doc}"
-        return "other", stem
-
-    if head == "patterns":
-        return "pattern", stem
-
-    if head == "skills":
-        return "skill", stem
-
-    if head == "workflows":
-        return "workflow", stem
-
-    if head == "gates":
-        if relative_path == "gates/README.md":
-            return "gate", "gate"
-        return "other", stem
-
-    return "other", stem
+    return infer_standards_type(relative_path)
 
 
-# Public alias retained for tests / callers that only need the type.
 def _infer_doc_type(relative_path: str) -> str:
     return _infer_doc_type_and_name(relative_path)[0]
 
 
 # ---------------------------------------------------------------------------
-# Exclusions
+# Exclusions (legacy shim only)
 # ---------------------------------------------------------------------------
 
 
@@ -297,7 +335,6 @@ def _is_excluded(relative_path: str) -> bool:
             return True
     if relative_path in _EXCLUDED_TOP_LEVEL_FILES:
         return True
-    # Per-project README.md (e.g. apache-camel/README.md) is human-only.
     parts = Path(relative_path).parts
     if len(parts) == 2 and parts[1] in _EXCLUDED_PROJECT_FILES:
         return True
@@ -316,16 +353,17 @@ def _list_gate_scripts(project_root: Path) -> list[str]:
     return sorted(p.name for p in scripts_dir.iterdir() if p.is_file())
 
 
-def _parse_docs(repo_root: Path) -> list[RuleDoc]:
-    """Walk repo, load all .md files into RuleDoc list."""
+def parse_corpus(spec: CorpusSpec) -> list[RuleDoc]:
+    """Walk a corpus root and load all .md files into RuleDoc list."""
+    root = spec.root
+    if not root.is_dir():
+        logger.info("Corpus root %s does not exist; loading 0 docs.", root)
+        return []
+
     docs: list[RuleDoc] = []
-
-    for md_file in repo_root.rglob("*.md"):
-        relative = md_file.relative_to(repo_root)
+    for md_file in root.rglob("*.md"):
+        relative = md_file.relative_to(root)
         relative_str = relative.as_posix()
-
-        if _is_excluded(relative_str):
-            continue
 
         parts = relative.parts
         if len(parts) < 2:
@@ -337,7 +375,16 @@ def _parse_docs(repo_root: Path) -> list[RuleDoc]:
 
         project = parts[0]
         doc_relative = "/".join(parts[1:])
-        doc_type, name = _infer_doc_type_and_name(doc_relative)
+
+        # Per-project excluded files (e.g. README.md)
+        if Path(doc_relative).name in spec.excluded_files and Path(doc_relative).parts == (
+            Path(doc_relative).name,
+        ):
+            continue
+        if doc_relative in spec.excluded_files:
+            continue
+
+        doc_type, name = spec.infer(doc_relative)
 
         try:
             raw_content = md_file.read_text(encoding="utf-8")
@@ -347,30 +394,33 @@ def _parse_docs(repo_root: Path) -> list[RuleDoc]:
 
         metadata, body = _parse_frontmatter(raw_content)
 
-        # Inject derived metadata
+        # Prefer frontmatter id for PRD/story names
+        meta_id = metadata.get("id")
+        if isinstance(meta_id, str) and meta_id.strip() and doc_type in ("prd", "story"):
+            name = meta_id.strip()
+
         if doc_type == "language-rules":
-            # languages/<lang>/<doc>.md — store the language code.
-            metadata.setdefault("language", parts[1] if parts[0] == "languages" else "")
-            # parts here are project-relative; the language is parts[1] (after 'languages/').
             lang_parts = Path(doc_relative).parts
             if len(lang_parts) >= 2 and lang_parts[0] == "languages":
                 metadata["language"] = lang_parts[1]
 
         if doc_type == "gate":
-            scripts = _list_gate_scripts(repo_root / project)
+            scripts = _list_gate_scripts(root / project)
             if scripts:
                 metadata["gate_scripts"] = scripts
 
         if doc_type == "other":
             logger.warning(
-                "Doc %s/%s does not match the expected layout; "
+                "Doc %s/%s/%s does not match the expected layout; "
                 "indexing as 'other' (validator will flag this).",
+                spec.name,
                 project,
                 doc_relative,
             )
 
         docs.append(
             RuleDoc(
+                corpus=spec.name,
                 project=project,
                 relative_path=doc_relative,
                 doc_type=doc_type,
@@ -379,9 +429,23 @@ def _parse_docs(repo_root: Path) -> list[RuleDoc]:
                 metadata=metadata,
             )
         )
-        logger.debug("Loaded: %s / %s (%s)", project, doc_relative, doc_type)
+        logger.debug("Loaded [%s]: %s / %s (%s)", spec.name, project, doc_relative, doc_type)
 
     return docs
+
+
+def _parse_docs(repo_root: Path) -> list[RuleDoc]:
+    """Legacy entry: treat `repo_root` as a standards corpus root.
+
+    Used by tests and the validator when pointing at an explicit root.
+    """
+    spec = CorpusSpec(
+        name="standards",
+        root=repo_root,
+        cache_policy="boot",
+        infer=infer_standards_type,
+    )
+    return parse_corpus(spec)
 
 
 # ---------------------------------------------------------------------------
@@ -389,24 +453,78 @@ def _parse_docs(repo_root: Path) -> list[RuleDoc]:
 # ---------------------------------------------------------------------------
 
 
-def resolve_rules_root() -> Path:
-    """Parent of the mcp/ directory."""
-    root = _DEFAULT_RULES_ROOT
-    if not root.is_dir():
-        raise FileNotFoundError(
-            f"Rules root does not exist or is not a directory: {root}",
+def resolve_standards_root() -> Path:
+    """Resolve the standards corpus root with a 2-release back-compat shim.
+
+    Preference order:
+      1. MCP_STANDARDS_ROOT (via standards_spec)
+      2. <repo>/standards if it exists
+      3. <repo> itself (legacy: projects next to mcp/) + deprecation warning
+    """
+    spec = standards_spec()
+    if spec.root.is_dir():
+        # If standards/ exists but is empty and legacy layout still has projects,
+        # still prefer standards/ (explicit).
+        return spec.root
+
+    # Back-compat: standards/ missing → fall back to repo root
+    legacy = _REPO
+    if legacy.is_dir():
+        warnings.warn(
+            "MCP_STANDARDS_ROOT unset and standards/ missing; "
+            "falling back to legacy repo-root layout. "
+            "Move projects under standards/ (deprecated; remove in 2 releases).",
+            DeprecationWarning,
+            stacklevel=2,
         )
-    return root
+        logger.warning(
+            "Deprecation: loading standards from repo root %s "
+            "(move to standards/ or set MCP_STANDARDS_ROOT).",
+            legacy,
+        )
+        return legacy
+
+    raise FileNotFoundError(
+        f"Standards root does not exist: {spec.root} (and legacy {_REPO} missing)",
+    )
 
 
-def load_store(repo_root: Path) -> RulesStore:
-    """Load all rule docs from disk into memory."""
-    docs = _parse_docs(repo_root)
-    logger.info("Loaded %d rule docs from %s.", len(docs), repo_root)
-    return RulesStore(docs=docs)
+def resolve_rules_root() -> Path:
+    """Alias for resolve_standards_root() - kept for existing callers."""
+    return resolve_standards_root()
 
 
-def bootstrap() -> RulesStore:
-    """Resolve rules root and load. Call once at server startup."""
-    repo_root = resolve_rules_root()
-    return load_store(repo_root)
+def load_store(repo_root: Path, *, corpus: str = "standards") -> DocStore:
+    """Load docs from an explicit root as the given corpus name."""
+    if corpus == "requirements":
+        infer = requirements_spec().infer
+    else:
+        infer = infer_standards_type
+    spec = CorpusSpec(
+        name=corpus,
+        root=repo_root,
+        cache_policy="boot",
+        infer=infer,
+    )
+    docs = parse_corpus(spec)
+    logger.info("Loaded %d %s docs from %s.", len(docs), corpus, repo_root)
+    return DocStore(docs=docs)
+
+
+def bootstrap() -> DocStore:
+    """Load standards corpus only (back-compat for callers expecting one store)."""
+    root = resolve_standards_root()
+    return load_store(root, corpus="standards")
+
+
+def bootstrap_all() -> DocStore:
+    """Load both standards and requirements into one DocStore."""
+    std = parse_corpus(standards_spec())
+    req_spec = requirements_spec()
+    req = parse_corpus(req_spec) if req_spec.root.is_dir() else []
+    logger.info(
+        "Loaded %d standards + %d requirements docs.",
+        len(std),
+        len(req),
+    )
+    return DocStore(docs=std + req)

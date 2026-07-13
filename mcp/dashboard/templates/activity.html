@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Activity — {{ server_label }}{% endblock %}
+{% block title %}Activity - {{ server_label }}{% endblock %}
 {% block crumb %}Recent activity{% endblock %}
 
 {% block content %}
@@ -61,7 +61,7 @@
               <a href="/dashboard/users/{{ c.user_name }}">{{ c.user_name }}</a>
             </div>
           </td>
-          <td class="muted">{{ c.editor_name or "—" }}</td>
+          <td class="muted">{{ c.editor_name or " - " }}</td>
           <td><code>{{ c.tool_name }}</code></td>
           <td class="muted truncate">{{ c.args_summary }}</td>
           <td class="num">{{ c.latency_ms }}ms</td>

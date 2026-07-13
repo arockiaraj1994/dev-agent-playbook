@@ -1,5 +1,5 @@
 """
-quality.py — Score the per-project rule corpus for the dashboard.
+quality.py - Score the per-project rule corpus for the dashboard.
 
 Pure functions over the in-memory `RulesStore`. Used by the Projects
 pages in the dashboard. See `quality_rules.py` for the rule library.
@@ -15,12 +15,11 @@ from quality_rules import (
     REQUIRED_FILES,
     REQUIRED_WORKFLOWS,
     SEVERITY_HARD,
+    UNIVERSAL_RULES,
     RuleContext,
     RuleResult,
-    UNIVERSAL_RULES,
     rules_for,
 )
-
 
 # ---------------------------------------------------------------------------
 # Result types
@@ -32,8 +31,8 @@ class FileStatus:
     relative_path: str
     doc_type: str
     name: str
-    indicator: str            # "red" | "amber" | "green"
-    rules: list[RuleResult]   # all rules that ran, passed and failed
+    indicator: str  # "red" | "amber" | "green"
+    rules: list[RuleResult]  # all rules that ran, passed and failed
     title: str = ""
     summary: str = ""
 
@@ -58,9 +57,9 @@ class FileStatus:
 class ProjectStatus:
     project: str
     indicator: str
-    files: list[FileStatus]                # sorted by display order
-    missing_required: list[str]            # required paths absent on disk
-    rule_results: list[RuleResult]         # project-level rules (rollup)
+    files: list[FileStatus]  # sorted by display order
+    missing_required: list[str]  # required paths absent on disk
+    rule_results: list[RuleResult]  # project-level rules (rollup)
     counts: dict[str, int] = field(default_factory=dict)
 
     @property
@@ -106,13 +105,19 @@ def _doc_summary(doc: RuleDoc, max_len: int = 160) -> str:
     return ""
 
 
-# Display order — group by folder, then alphabetical within group.
+# Display order - group by folder, then alphabetical within group.
 _DISPLAY_ORDER = (
-    "agents", "index",
-    "guardrails", "definition-of-done", "glossary",
-    "architecture", "architecture-decision",
+    "agents",
+    "index",
+    "guardrails",
+    "definition-of-done",
+    "glossary",
+    "architecture",
+    "architecture-decision",
     "language-rules",
-    "pattern", "skill", "workflow",
+    "pattern",
+    "skill",
+    "workflow",
     "gate",
 )
 
@@ -167,8 +172,10 @@ def _project_level_rules(
 
     Returns (results, missing_required).
     """
-    on_disk = {(project_root / rel).relative_to(project_root).as_posix(): (project_root / rel)
-               for rel in REQUIRED_FILES}
+    on_disk = {
+        (project_root / rel).relative_to(project_root).as_posix(): (project_root / rel)
+        for rel in REQUIRED_FILES
+    }
     missing: list[str] = []
     for rel, p in on_disk.items():
         if not p.is_file():
@@ -199,7 +206,7 @@ def _project_level_rules(
             severity=SEVERITY_HARD,
             passed=not missing,
             message=(
-                f"All required files present"
+                "All required files present"
                 if not missing
                 else f"Missing required files: {', '.join(missing)}"
             ),
@@ -231,7 +238,7 @@ def _project_level_rules(
             message=(
                 f"Has {len(adrs)} ADR(s) under architecture/decisions/"
                 if adrs
-                else "No ADRs yet — encourage the team to record decisions"
+                else "No ADRs yet - encourage the team to record decisions"
             ),
         )
     )
@@ -240,8 +247,7 @@ def _project_level_rules(
     index_file = next((fs for fs in file_statuses if fs.doc_type == "index"), None)
     if index_file is not None:
         drift_failed = any(
-            not r.passed and r.rule_id == "index.up_to_date"
-            for r in index_file.rules
+            not r.passed and r.rule_id == "index.up_to_date" for r in index_file.rules
         )
         results.append(
             RuleResult(
@@ -251,7 +257,7 @@ def _project_level_rules(
                 message=(
                     "INDEX.md is up to date"
                     if not drift_failed
-                    else "INDEX.md is stale — run `python scripts/validate-rules.py --regen-index`"
+                    else "INDEX.md is stale - run `python scripts/validate-rules.py --regen-index`"
                 ),
             )
         )
@@ -264,13 +270,18 @@ def score_project(
     store: RulesStore,
     project_root: Path,
 ) -> ProjectStatus:
-    project_files = store.for_project(project)
+    project_files = store.for_project(project, corpus="standards")
+    if not project_files:
+        # Back-compat for tests that don't set corpus
+        project_files = [
+            d
+            for d in store.for_project(project)
+            if getattr(d, "corpus", "standards") == "standards"
+        ]
 
     # Read INDEX.md from disk once and pass into RuleContext.
     index_path = project_root / "INDEX.md"
-    on_disk_index = (
-        index_path.read_text(encoding="utf-8") if index_path.is_file() else None
-    )
+    on_disk_index = index_path.read_text(encoding="utf-8") if index_path.is_file() else None
 
     ctx = RuleContext(
         project_root=project_root,

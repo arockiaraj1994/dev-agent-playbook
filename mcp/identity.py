@@ -1,5 +1,5 @@
 """
-identity.py — MCP identity resolution for /sse and /messages/ requests.
+identity.py - MCP identity resolution for /sse and /messages/ requests.
 
 Responsibility: validate Authorization: Bearer <token> headers against the
 AuthStore (token_type="mcp") and resolve them to a Principal.
@@ -7,8 +7,8 @@ AuthStore (token_type="mcp") and resolve them to a Principal.
 Dashboard/browser identity is handled separately in session.py.
 
 Two modes, controlled by auth_enabled:
-  * auth on  — Bearer token validated via AuthStore; 401 if missing or invalid.
-  * auth off — best-effort: X-MCP-User header, ?user= param, or client IP.
+  * auth on - Bearer token validated via AuthStore; 401 if missing or invalid.
+  * auth off - best-effort: X-MCP-User header, ?user= param, or client IP.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from starlette.types import Receive, Scope, Send
+from starlette.types import Scope, Send
 
 if TYPE_CHECKING:
     from auth import AuthStore
@@ -142,7 +142,7 @@ async def send_json_401(send: Send, description: str) -> None:
 async def resolve_bearer_token(
     scope: Scope,
     send: Send,
-    auth_store: "AuthStore",
+    auth_store: AuthStore,
     auth_enabled: bool,
 ) -> Principal | None:
     """

@@ -3,79 +3,114 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{{ server_label }} — MCP dashboard{% endblock %}</title>
+  <title>{% block title %}{{ server_label }} - MCP dashboard{% endblock %}</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="/dashboard/static/style.css">
 </head>
 <body>
 
-<div class="app">
+<div class="app" id="app-shell">
+<script>
+/* Avoid rail FOUC: apply collapsed class before paint when persisted */
+(function () {
+  try {
+    if (localStorage.getItem("dp-sidebar-collapsed") === "1") {
+      document.getElementById("app-shell").classList.add("sidebar-collapsed");
+    }
+  } catch (e) { /* ignore */ }
+})();
+</script>
 
   <!-- ── Sidebar ─────────────────────────────────── -->
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="brand">
       <div class="brand-mark">M</div>
-      <div>
+      <div class="brand-text">
         <div class="brand-name">{{ server_label }}</div>
         <span class="brand-sub">MCP server</span>
       </div>
+      <button type="button" class="sidebar-collapse-btn" id="sidebar-collapse-btn"
+              aria-label="Collapse sidebar" title="Collapse sidebar">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+      </button>
     </div>
 
-    <div class="nav-section-label">Overview</div>
-    <a href="/dashboard/" class="nav-item {% if page == 'dashboard' %}active{% endif %}">
-      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
-      Dashboard
-    </a>
-    <a href="/dashboard/projects" class="nav-item {% if page == 'projects' %}active{% endif %}">
-      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-      Projects
-    </a>
-    <a href="/dashboard/users" class="nav-item {% if page == 'users' %}active{% endif %}">
-      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      Users
-    </a>
-    <a href="/dashboard/activity" class="nav-item {% if page == 'activity' %}active{% endif %}">
-      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      Activity
-    </a>
+    <nav class="sidebar-nav" aria-label="Main">
+      <div class="nav-pins">
+        <a href="/dashboard/" class="nav-item nav-item-pin {% if page == 'dashboard' %}active{% endif %}" title="Dashboard">
+          <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+          <span class="nav-label">Dashboard</span>
+        </a>
+        <a href="/dashboard/projects" class="nav-item nav-item-pin {% if page == 'projects' %}active{% endif %}" title="Standards">
+          <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <span class="nav-label">Standards</span>
+        </a>
+        <a href="/dashboard/requirements" class="nav-item nav-item-pin {% if page == 'requirements' %}active{% endif %}" title="Requirements">
+          <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <span class="nav-label">Requirements</span>
+        </a>
+      </div>
 
-    <div class="nav-section-label">Analytics</div>
-    <a href="/dashboard/tools" class="nav-item {% if page == 'tools' %}active{% endif %}">
-      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 1-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 1 6-6 4.5 4.5 0 0 1-3-3z"/></svg>
-      Tools
-    </a>
-    <a href="/dashboard/searches" class="nav-item {% if page == 'searches' %}active{% endif %}">
-      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-      Searches
-    </a>
+      <div class="nav-group" data-group="manage">
+        <button type="button" class="nav-group-toggle" aria-expanded="false" aria-controls="nav-manage">
+          <span>Manage</span>
+          <svg class="nav-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nav-group-items" id="nav-manage" hidden>
+          <a href="/dashboard/users" class="nav-item {% if page == 'users' %}active{% endif %}" title="Users">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span class="nav-label">Users</span>
+          </a>
+          <a href="/dashboard/tokens" class="nav-item {% if page == 'tokens' %}active{% endif %}" title="Tokens">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+            <span class="nav-label">Tokens</span>
+          </a>
+          {% if is_admin %}
+          <a href="/dashboard/users-admin" class="nav-item {% if page == 'users-admin' %}active{% endif %}" title="Manage Users">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>
+            <span class="nav-label">Manage Users</span>
+          </a>
+          {% endif %}
+          <a href="/dashboard/setup" class="nav-item {% if page == 'setup' %}active{% endif %}" title="Setup">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span class="nav-label">Setup</span>
+          </a>
+          <a href="/dashboard/guide" class="nav-item {% if page == 'guide' %}active{% endif %}" title="Guide">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            <span class="nav-label">Guide</span>
+          </a>
+        </div>
+      </div>
+      <div class="nav-group" data-group="analytics">
+        <button type="button" class="nav-group-toggle" aria-expanded="false" aria-controls="nav-analytics">
+          <span>Analytics</span>
+          <svg class="nav-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="nav-group-items" id="nav-analytics" hidden>
+          <a href="/dashboard/tools" class="nav-item {% if page == 'tools' %}active{% endif %}" title="Tools">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 1-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 1 6-6 4.5 4.5 0 0 1-3-3z"/></svg>
+            <span class="nav-label">Tools</span>
+          </a>
+          <a href="/dashboard/searches" class="nav-item {% if page == 'searches' %}active{% endif %}" title="Searches">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <span class="nav-label">Searches</span>
+          </a>
+          <a href="/dashboard/activity" class="nav-item {% if page == 'activity' %}active{% endif %}" title="Activity">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <span class="nav-label">Activity</span>
+          </a>
+        </div>
+      </div>
 
-    <div class="nav-section-label">Manage</div>
-    <a href="/dashboard/tokens" class="nav-item {% if page == 'tokens' %}active{% endif %}">
-      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
-      Tokens
-    </a>
-    {% if is_admin %}
-    <a href="/dashboard/users-admin" class="nav-item {% if page == 'users-admin' %}active{% endif %}">
-      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>
-      Manage Users
-    </a>
-    {% endif %}
-    <a href="/dashboard/setup" class="nav-item {% if page == 'setup' %}active{% endif %}">
-      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      Setup
-    </a>
-    <a href="/dashboard/guide" class="nav-item {% if page == 'guide' %}active{% endif %}">
-      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-      Guide
-    </a>
+    </nav>
 
     <div class="sidebar-footer">
       <span class="health-dot"></span>
-      <span>Server healthy</span>
+      <span class="sidebar-footer-text">Server healthy</span>
     </div>
   </aside>
 
@@ -100,7 +135,7 @@
         <div class="user-chip">
           <div class="avatar" data-name="{{ principal.user_name }}">{{ principal.user_name[0].upper() }}</div>
           <span>{{ principal.user_name }}</span>
-          {% if principal.role == 'admin' %}<span class="badge" style="font-size:.65rem;padding:.1rem .35rem;background:rgba(99,102,241,.1);color:#6366f1;border-color:rgba(99,102,241,.25)">admin</span>{% endif %}
+          {% if principal.role == 'admin' %}<span class="badge" style="font-size:.65rem;padding:.1rem .35rem;background:var(--violet-50);color:var(--violet-700);border-color:var(--violet-100)">admin</span>{% endif %}
         </div>
         <form method="post" action="/logout" style="margin:0">
           <input type="hidden" name="_csrf" value="{{ csrf_token }}">
@@ -206,6 +241,8 @@ document.querySelectorAll('.code-copy').forEach(function (btn) {
   });
 });
 </script>
+
+<script src="/dashboard/static/nav.js"></script>
 
 {% block page_script %}{% endblock %}
 

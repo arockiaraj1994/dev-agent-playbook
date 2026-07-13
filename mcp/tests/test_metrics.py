@@ -1,4 +1,4 @@
-"""Tests for metrics.py — storage, helpers, and aggregations."""
+"""Tests for metrics.py - storage, helpers, and aggregations."""
 
 from __future__ import annotations
 
@@ -59,13 +59,72 @@ def test_summarize_args_handles_non_string_values() -> None:
 @pytest.mark.parametrize(
     "tool,args,expected",
     [
+        ("get_doc", {"project": "p", "kind": "agents"}, "p/AGENTS.md"),
+        (
+            "get_doc",
+            {"project": "p", "kind": "guardrails"},
+            "p/core/guardrails.md+definition-of-done.md",
+        ),
+        ("get_doc", {"project": "p", "kind": "architecture"}, "p/architecture/overview.md"),
+        (
+            "get_doc",
+            {"project": "p", "kind": "architecture", "name": "0007-foo"},
+            "p/architecture/decisions/0007-foo.md",
+        ),
+        (
+            "get_doc",
+            {"project": "p", "kind": "language", "name": "java"},
+            "p/languages/java/standards.md",
+        ),
+        (
+            "get_doc",
+            {"project": "p", "kind": "language", "name": "java", "doc": "testing"},
+            "p/languages/java/testing.md",
+        ),
+        (
+            "get_doc",
+            {"project": "p", "kind": "pattern", "name": "react"},
+            "p/patterns/react.md",
+        ),
+        ("get_doc", {"project": "p", "kind": "skill", "name": "deploy"}, "p/skills/deploy.md"),
+        (
+            "get_doc",
+            {"project": "p", "kind": "workflow", "name": "bug-fix"},
+            "p/workflows/bug-fix.md",
+        ),
+        ("get_doc", {"project": "p", "kind": "gate"}, "p/gates/README.md"),
+        (
+            "get_doc",
+            {"project": "p", "kind": "gate", "name": "verify-java"},
+            "p/gates/scripts/verify-java.sh",
+        ),
+        (
+            "get_doc",
+            {"project": "p", "kind": "requirement", "name": "ST-101"},
+            "requirements/p/ST-101",
+        ),
+        ("get_doc", {"project": "p", "kind": "pattern"}, None),
+        ("get_doc", {"kind": "pattern", "name": "react"}, None),
+        # Legacy tool names still resolve for historical metrics rows.
         ("get_agents_md", {"project": "p"}, "p/AGENTS.md"),
         ("get_index", {"project": "p"}, "p/INDEX.md"),
         ("get_guardrails", {"project": "p"}, "p/core/guardrails.md+definition-of-done.md"),
         ("get_architecture", {"project": "p"}, "p/architecture/overview.md"),
-        ("get_architecture", {"project": "p", "name": "0007-foo"}, "p/architecture/decisions/0007-foo.md"),
-        ("get_language_rules", {"project": "p", "language": "java"}, "p/languages/java/standards.md"),
-        ("get_language_rules", {"project": "p", "language": "java", "doc": "testing"}, "p/languages/java/testing.md"),
+        (
+            "get_architecture",
+            {"project": "p", "name": "0007-foo"},
+            "p/architecture/decisions/0007-foo.md",
+        ),
+        (
+            "get_language_rules",
+            {"project": "p", "language": "java"},
+            "p/languages/java/standards.md",
+        ),
+        (
+            "get_language_rules",
+            {"project": "p", "language": "java", "doc": "testing"},
+            "p/languages/java/testing.md",
+        ),
         ("get_pattern", {"project": "p", "pattern": "react"}, "p/patterns/react.md"),
         ("get_skill", {"project": "p", "skill": "deploy"}, "p/skills/deploy.md"),
         ("get_workflow", {"project": "p", "name": "bug-fix"}, "p/workflows/bug-fix.md"),
@@ -141,7 +200,7 @@ async def test_record_call_writes_row(store: MetricsStore) -> None:
 
 
 async def test_list_users_status_classification(store: MetricsStore) -> None:
-    # alice — recent call → active
+    # alice - recent call → active
     await store.upsert_registration(
         user_id="u1",
         user_name="alice",
@@ -157,14 +216,14 @@ async def test_list_users_status_classification(store: MetricsStore) -> None:
         latency_ms=5,
         status="ok",
     )
-    # bob — registered but never called → never-called
+    # bob - registered but never called → never-called
     await store.upsert_registration(
         user_id="u2",
         user_name="bob",
         editor_name="cursor",
         editor_version="1",
     )
-    # charlie — registered, called long ago → inactive
+    # charlie - registered, called long ago → inactive
     await store.upsert_registration(
         user_id="u3",
         user_name="charlie",

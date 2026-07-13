@@ -1,4 +1,4 @@
-"""Tests for dashboard/auth_routes.py — CSRF, sliding cookie, redirect targets."""
+"""Tests for dashboard/auth_routes.py - CSRF, sliding cookie, redirect targets."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import pytest
 from auth import AuthStore
 from dashboard.auth_routes import build_auth_routes
 from session import DashboardSession
-
 
 # ---------------------------------------------------------------------------
 # ASGI scaffolding helpers
@@ -30,6 +29,7 @@ class _FakeReceive:
 
 def _form_body(fields: dict[str, str]) -> bytes:
     from urllib.parse import urlencode
+
     return urlencode(fields).encode()
 
 
@@ -146,7 +146,7 @@ async def test_logout_post_missing_csrf_returns_403(routes, store: AuthStore) ->
     scope = _scope("POST", "/logout", cookie=f"session={token}", body_len=0)
     status, _, _ = await _run(logout_post, scope, _FakeReceive(body))
     assert status == 403
-    # Token must still resolve — logout was rejected
+    # Token must still resolve - logout was rejected
     assert await store.resolve_token(token, token_type="session") is not None
 
 
@@ -158,9 +158,7 @@ async def test_logout_post_valid_csrf_revokes_token(routes, store: AuthStore) ->
     token = token_data["token"]
 
     body = _form_body({"_csrf": "tok"})
-    scope = _scope(
-        "POST", "/logout", cookie=f"session={token}; csrf_token=tok", body_len=len(body)
-    )
+    scope = _scope("POST", "/logout", cookie=f"session={token}; csrf_token=tok", body_len=len(body))
     status, _, _ = await _run(logout_post, scope, _FakeReceive(body))
     assert status == 303
     assert await store.resolve_token(token, token_type="session") is None
