@@ -65,6 +65,33 @@ KNOWN_DOC_TYPES = (
 )
 
 
+# Recognized `<kind>` values in a doc's `see_also:` frontmatter. Entries whose
+# kind is not listed here render nothing, so validate-rules.py fails on them.
+# Lives here, not in tools/, so the validator can import it without `mcp`.
+SEE_ALSO_KINDS = (
+    "tool",
+    "pattern",
+    "skill",
+    "workflow",
+    "gate",
+    "gates",  # tolerated alias of `gate`
+    "language",
+    "architecture",
+    "core",
+)
+
+# Valid `<name>` values for `see_also: [tool:<name>]`.
+SEE_ALSO_TOOLS = (
+    "start_task",
+    "get_guardrails",
+    "find_rules",
+    "list_projects",
+)
+
+# Valid `<name>` values for `see_also: [core:<name>]` — both map to get_guardrails.
+SEE_ALSO_CORE = ("guardrails", "definition-of-done")
+
+
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------

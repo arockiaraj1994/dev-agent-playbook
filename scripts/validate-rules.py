@@ -51,6 +51,9 @@ MCP_DIR = REPO_ROOT / "mcp"
 # Reuse the loader so this script always agrees with what the server sees.
 sys.path.insert(0, str(MCP_DIR))
 from loader import (  # noqa: E402
+    SEE_ALSO_CORE,
+    SEE_ALSO_KINDS,
+    SEE_ALSO_TOOLS,
     RuleDoc,
     _parse_docs,
     _parse_frontmatter,
@@ -203,6 +206,57 @@ def _check_no_other_doc_types(docs: list[RuleDoc]) -> list[_Error]:
     ]
 
 
+def _check_see_also_kinds(docs: list[RuleDoc]) -> list[_Error]:
+    """Reject `see_also` entries the server cannot render into a tool call.
+
+    An unknown kind is silently dropped from the `## Next Calls` block, so the
+    doc looks fine on disk while the agent's chain quietly dead-ends.
+    """
+    errors: list[_Error] = []
+    for d in docs:
+        raw = d.metadata.get("see_also") or []
+        if not isinstance(raw, list):
+            errors.append(
+                (d.project, "see_also", f"{d.project}/{d.relative_path}: see_also must be a list")
+            )
+            continue
+        for entry in raw:
+            where = f"{d.project}/{d.relative_path}: see_also entry '{entry}'"
+            if not isinstance(entry, str) or ":" not in entry:
+                errors.append((d.project, "see_also", f"{where} is not '<kind>:<name>'"))
+                continue
+            kind, _, name = entry.partition(":")
+            kind, name = kind.strip(), name.strip()
+            if kind not in SEE_ALSO_KINDS:
+                errors.append(
+                    (
+                        d.project,
+                        "see_also",
+                        f"{where} has unknown kind '{kind}' "
+                        f"(expected one of {', '.join(SEE_ALSO_KINDS)})",
+                    )
+                )
+            elif kind == "tool" and name not in SEE_ALSO_TOOLS:
+                errors.append(
+                    (
+                        d.project,
+                        "see_also",
+                        f"{where} names unknown tool '{name}' "
+                        f"(expected one of {', '.join(SEE_ALSO_TOOLS)})",
+                    )
+                )
+            elif kind == "core" and name not in SEE_ALSO_CORE:
+                errors.append(
+                    (
+                        d.project,
+                        "see_also",
+                        f"{where} names unknown core doc '{name}' "
+                        f"(expected one of {', '.join(SEE_ALSO_CORE)})",
+                    )
+                )
+    return errors
+
+
 # ---------------------------------------------------------------------------
 # INDEX.md generator (delegates to mcp/index_render.py)
 # ---------------------------------------------------------------------------
@@ -280,6 +334,7 @@ def main(argv: list[str] | None = None) -> int:
     errors += _check_frontmatter(REPO_ROOT)
     errors += _check_links(REPO_ROOT)
     errors += _check_no_other_doc_types(docs)
+    errors += _check_see_also_kinds(docs)
 
     if args.check:
         errors += _regen_index(projects, docs, check_only=True)

@@ -476,7 +476,8 @@ class MetricsStore:
             SELECT query, user_name, top_result_path, top_result_score,
                    args_summary, created_at
             FROM calls
-            WHERE tool_name = 'search_rules' AND query IS NOT NULL {clause}
+            WHERE tool_name IN ('search_rules', 'find_rules')
+              AND query IS NOT NULL {clause}
             ORDER BY created_at DESC
             LIMIT ?
         """

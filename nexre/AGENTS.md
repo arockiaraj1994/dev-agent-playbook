@@ -2,6 +2,7 @@
 title: AGENTS.md — NexRe
 description: Identity and behavior for AI agents working on NexRe, a privacy-first read-it-later Android app (Kotlin + Compose + Hilt + Room).
 tags: [android, kotlin, compose, hilt, room, clean-architecture]
+see_also: [tool:start_task, tool:get_guardrails, workflow:new-feature, workflow:bug-fix]
 ---
 
 # AGENTS.md — NexRe (Android · Kotlin · Compose · Hilt · Room)

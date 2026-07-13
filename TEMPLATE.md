@@ -8,11 +8,27 @@ The YAML frontmatter block is optional except where noted (workflows and
 skills should set `triggers:` and `see_also:` so `start_task` and
 `INDEX.md` work).
 
+Two conventions in `AGENTS.md` are load-bearing, not decorative:
+
+- **`see_also: [tool:start_task, …]`** — without it the doc renders no
+  `## Next Calls` block, so an agent that opens `AGENTS.md` first has nowhere
+  to chain to and simply stops. This is the single most common authoring
+  mistake.
+- **A `## IDENTITY` H2** — `start_task` lifts exactly this section into its
+  bundle. Anything outside it is only reachable via `get_agents_md`.
+
 ---
 
 ## `AGENTS.md`
 
 ```markdown
+---
+title: AGENTS.md — <Project>
+description: Identity and behavior for AI agents working on <project>.
+tags: [<stack>, <lang>]
+see_also: [tool:start_task, tool:get_guardrails, workflow:new-feature, workflow:bug-fix]
+---
+
 # AGENTS.md — <Project> (<short stack>)
 
 **Stack:** <one-line stack summary>

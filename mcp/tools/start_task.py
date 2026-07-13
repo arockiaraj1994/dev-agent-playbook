@@ -3,17 +3,22 @@
 `start_task(project, task)` is the canonical first call for any task. It
 returns a single bundle containing:
 
-  1. The project's always-on rules (core/guardrails.md + core/definition-of-done.md).
-  2. The matched workflow doc (chosen by `triggers:` frontmatter, with BM25
+  1. The project's IDENTITY section, lifted from AGENTS.md.
+  2. The project's always-on rules (core/guardrails.md + core/definition-of-done.md).
+  3. The matched workflow doc (chosen by `triggers:` frontmatter, with BM25
      fallback when no trigger matches).
-  3. A `## Next Calls` section listing the exact follow-up tool calls the
+  4. A `## Next Calls` section listing the exact follow-up tool calls the
      agent should make next (skills + patterns referenced by the workflow).
 
 The goal is to eliminate the "which tool first?" guess: one round-trip and
-the agent has both the orientation and the call chain it needs.
+the agent has both the orientation and the call chain it needs. Inlining
+IDENTITY is what removes the reason to reach for get_agents_md, which is a
+6KB doc that mostly restates the guardrails already bundled here.
 """
 
 from __future__ import annotations
+
+import re
 
 from mcp.types import TextContent, Tool
 
@@ -26,11 +31,12 @@ DEFINITIONS: list[Tool] = [
     Tool(
         name="start_task",
         description=(
-            "Call this FIRST for any task. Pass a free-form sentence describing "
-            "what the user asked for. Returns a bootstrap bundle: always-on "
-            "guardrails + the matched workflow + `Next Calls` pointing at the "
-            "skills and patterns to fetch next. Replaces the older "
-            "list_projects → get_agents_md → get_pattern guessing chain."
+            "ALWAYS call this FIRST for any coding task in a project — before "
+            "get_agents_md or any other get_* tool. Pass a free-form sentence "
+            "describing what the user asked for. Returns a bootstrap bundle: "
+            "the project's identity + always-on guardrails + the matched "
+            "workflow + `Next Calls` pointing at the skills and patterns to "
+            "fetch next."
         ),
         inputSchema={
             "type": "object",
@@ -94,14 +100,44 @@ def _match_workflow(
     return store.get(project, top.relative_path)
 
 
+# The IDENTITY block runs to the next H2, or to EOF if it is the last section.
+_IDENTITY_RE = re.compile(
+    r"^##\s+IDENTITY\b.*?(?=^##\s|\Z)", re.MULTILINE | re.DOTALL | re.IGNORECASE
+)
+
+
+def _identity_section(agents: RuleDoc | None, max_chars: int = 1200) -> str:
+    """The `## IDENTITY` block of AGENTS.md, or "" if absent.
+
+    Deliberately narrow: the rest of AGENTS.md restates the guardrails that
+    this bundle already inlines, so we never fall back to the whole doc.
+    """
+    if not agents:
+        return ""
+    match = _IDENTITY_RE.search(agents.content)
+    if not match:
+        return ""
+    # Sections are separated by `---` rules; drop the trailing one.
+    body = match.group(0).strip().rstrip("-").strip()
+    if not body:
+        return ""
+    if len(body) > max_chars:
+        body = body[:max_chars].rstrip() + "\n\n_(truncated — call get_agents_md for the rest)_"
+    return body
+
+
 def _bundle_text(
     project: str,
     task: str,
+    identity: str,
     guard: RuleDoc | None,
     dod: RuleDoc | None,
     workflow: RuleDoc | None,
 ) -> str:
     parts: list[str] = [f"# start_task — {project}\n\n_Task:_ {task}\n"]
+
+    if identity:
+        parts.append(identity)
 
     if guard or dod:
         parts.append("## Always-on rules\n")
@@ -120,12 +156,15 @@ def _bundle_text(
             f"## Matched workflow: `{workflow.name}`\n\n"
             f"_Path:_ `{workflow.relative_path}`\n\n"
             + workflow.content.strip()
-            + _next_calls_section(workflow, project).lstrip()
+            # Keep the leading blank lines: without them the `---` rule collides
+            # with the last line of the workflow body and stops being a rule.
+            + _next_calls_section(workflow, project)
         )
     else:
         parts.append(
             "## Matched workflow\n\n"
-            "_No workflow matched. Try get_index or search_rules._"
+            "_No workflow matched. Try `find_rules(project=\"" + project + "\")` "
+            "to list the available docs._"
         )
 
     return "\n\n".join(parts) + "\n"
@@ -171,10 +210,12 @@ async def dispatch(
         ]
 
     setattr(ctx, "query", task)
+    identity = _identity_section(store.get(project, "AGENTS.md"))
     guard = store.get(project, "core/guardrails.md")
     dod = store.get(project, "core/definition-of-done.md")
     workflow = _match_workflow(store, engine, project, task)
     if workflow:
         setattr(ctx, "doc_path", f"{project}/{workflow.relative_path}")
 
-    return [TextContent(type="text", text=_bundle_text(project, task, guard, dod, workflow))]
+    text = _bundle_text(project, task, identity, guard, dod, workflow)
+    return [TextContent(type="text", text=text)]

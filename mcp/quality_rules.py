@@ -161,7 +161,7 @@ def _rule_has_description(doc: RuleDoc, _ctx: RuleContext) -> RuleResult:
     return _check(
         "universal.frontmatter_description", SEVERITY_SOFT,
         isinstance(desc, str) and bool(desc.strip()),
-        "Frontmatter has a `description:` (shown in `list_rule_docs` and INDEX)",
+        "Frontmatter has a `description:` (shown in `find_rules` and INDEX)",
     )
 
 

@@ -2,6 +2,7 @@
 title: AGENTS.md — Apache Camel
 description: Identity and behavior for AI agents working on Apache Camel integration projects (YAML DSL + Quarkus or Spring Boot + Java 21).
 tags: [camel, java, integration, yaml-dsl]
+see_also: [tool:start_task, tool:get_guardrails, workflow:new-feature, workflow:bug-fix]
 ---
 
 # AGENTS.md — Apache Camel
