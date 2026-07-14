@@ -89,4 +89,31 @@
       applyCollapsed(!app.classList.contains("sidebar-collapsed"));
     });
   }
+
+  /* Mobile off-canvas (<900px): hamburger opens, scrim/Escape/nav click closes */
+  var openBtn = document.getElementById("sidebar-open-btn");
+  var scrim = document.getElementById("sidebar-scrim");
+
+  function setMobileOpen(open) {
+    app.classList.toggle("sidebar-mobile-open", open);
+    if (openBtn) openBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  if (openBtn) {
+    openBtn.addEventListener("click", function () {
+      setMobileOpen(!app.classList.contains("sidebar-mobile-open"));
+    });
+  }
+  if (scrim) {
+    scrim.addEventListener("click", function () { setMobileOpen(false); });
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && app.classList.contains("sidebar-mobile-open")) {
+      setMobileOpen(false);
+    }
+  });
+  /* Navigating away naturally closes it, but same-page anchor taps should too */
+  document.querySelectorAll(".sidebar .nav-item").forEach(function (link) {
+    link.addEventListener("click", function () { setMobileOpen(false); });
+  });
 })();

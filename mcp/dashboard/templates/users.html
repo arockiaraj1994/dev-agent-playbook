@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_macros.html" as ui %}
 {% block title %}Users - {{ server_label }}{% endblock %}
 {% block crumb %}Users &amp; adoption{% endblock %}
 
@@ -13,26 +14,10 @@
 
 <!-- KPI grid -->
 <div class="kpi-grid">
-  <div class="kpi">
-    <div class="kpi-label">Configured</div>
-    <div class="kpi-value">{{ summary.total }}</div>
-    <div class="kpi-foot"><span class="muted">total seats</span></div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-label">Active</div>
-    <div class="kpi-value green">{{ summary.active }}</div>
-    <div class="kpi-foot"><span class="muted">called in last {{ inactive_days }}d</span></div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-label">Inactive</div>
-    <div class="kpi-value amber">{{ summary.inactive }}</div>
-    <div class="kpi-foot"><span class="muted">no calls in {{ inactive_days }}+ days</span></div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-label">Never called</div>
-    <div class="kpi-value" style="color:var(--text-subtle)">{{ summary.never_called }}</div>
-    <div class="kpi-foot"><span class="muted">configured but unused</span></div>
-  </div>
+  {{ ui.kpi("Configured", summary.total, foot="total seats") }}
+  {{ ui.kpi("Active", summary.active, foot="called in last " ~ inactive_days ~ "d", tone="green") }}
+  {{ ui.kpi("Inactive", summary.inactive, foot="no calls in " ~ inactive_days ~ "+ days", tone="amber") }}
+  {{ ui.kpi("Never called", summary.never_called, foot="configured but unused") }}
 </div>
 
 <!-- Filter row -->
@@ -69,14 +54,7 @@
       <tbody>
         {% for u in users %}
         <tr data-status="{{ u.status }}">
-          <td>
-            <div class="user-cell">
-              <div class="avatar" data-name="{{ u.user_name }}" style="width:24px;height:24px;font-size:10px">
-                {{ u.user_name[0].upper() }}
-              </div>
-              <a href="/dashboard/users/{{ u.user_name }}">{{ u.user_name }}</a>
-            </div>
-          </td>
+          <td>{{ ui.user_link(u.user_name, size=24, font=10) }}</td>
           <td>
             {% if u.editors %}
               <div class="editor-stack">
@@ -119,5 +97,6 @@ initTableFilter({
   tableId: 'users-table',
   statusAttr: 'status'
 });
+initTableSort('users-table');
 </script>
 {% endblock %}

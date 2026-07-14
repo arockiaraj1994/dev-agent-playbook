@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_macros.html" as ui %}
 {% block title %}Dashboard - {{ server_label }}{% endblock %}
 {% block crumb %}Dashboard{% endblock %}
 
@@ -7,13 +8,13 @@
 <div class="page-header">
   <div>
     <h1 class="page-title">Dashboard</h1>
-    <p class="page-sub">Live view of your team's MCP usage · {{ summary.connected }} editor{% if summary.connected != 1 %}s{% endif %} connected right now</p>
+    <p class="page-sub"><span class="live-pulse" id="live-indicator" title="Updates every 30s"></span>Live view of your team's MCP usage · <span id="sub-connected">{{ summary.connected }}</span> editor{% if summary.connected != 1 %}s{% endif %} connected right now</p>
   </div>
   <div class="page-actions">
     <div class="chip-row" id="range-chips">
-      <span class="chip active" data-range="24h">24h</span>
-      <span class="chip" data-range="7d">7d</span>
-      <span class="chip" data-range="30d">30d</span>
+      <a href="?window=24h" class="chip {% if window == '24h' %}active{% endif %}">24h</a>
+      <a href="?window=7d"  class="chip {% if window == '7d'  %}active{% endif %}">7d</a>
+      <a href="?window=30d" class="chip {% if window == '30d' %}active{% endif %}">30d</a>
     </div>
   </div>
 </div>
@@ -27,7 +28,7 @@
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-subtle)"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
       Currently connected
     </div>
-    <div class="kpi-value indigo">{{ summary.connected }}</div>
+    <div class="kpi-value indigo" id="kpi-connected">{{ summary.connected }}</div>
     <div class="kpi-foot">
       <span class="badge live"><span class="badge-dot"></span>open SSE</span>
       <span>initialized in last 4h</span>
@@ -38,9 +39,9 @@
   <div class="kpi">
     <div class="kpi-label">
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-subtle)"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-      Tool calls (24h)
+      Tool calls ({{ window }})
     </div>
-    <div class="kpi-value">{{ summary.calls_today }}</div>
+    <div class="kpi-value" id="kpi-calls">{{ summary.calls_today }}</div>
     <div class="kpi-foot">
       {% if summary.calls_trend > 0 %}
         <span class="kpi-trend up">
@@ -55,7 +56,7 @@
       {% else %}
         <span class="kpi-trend"> - </span>
       {% endif %}
-      <span>vs yesterday</span>
+      <span>vs previous {{ window }}</span>
     </div>
     <div class="kpi-spark" id="spark-calls"></div>
   </div>
@@ -88,7 +89,7 @@
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-subtle)"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       Zero-result searches
     </div>
-    <div class="kpi-value {% if summary.zero_today > 0 %}amber{% endif %}">{{ summary.zero_today }}</div>
+    <div class="kpi-value {% if summary.zero_today > 0 %}amber{% endif %}" id="kpi-zero">{{ summary.zero_today }}</div>
     <div class="kpi-foot">
       {% if summary.zero_trend > 0 %}
         <span class="kpi-trend down">↑{{ summary.zero_trend }}</span>
@@ -108,12 +109,12 @@
   <div class="panel">
     <div class="panel-header">
       <div>
-        <h2 class="panel-title">Tool calls - last 24 hours</h2>
-        <div class="panel-sub">Hourly volume by status</div>
+        <h2 class="panel-title">Tool calls - last {{ window }}</h2>
+        <div class="panel-sub">{% if window == '24h' %}Hourly{% else %}Daily{% endif %} volume by status</div>
       </div>
       <div class="legend">
-        <span class="legend-item"><span class="legend-dot" style="background:var(--indigo-500)"></span>ok</span>
-        <span class="legend-item"><span class="legend-dot" style="background:var(--red-500)"></span>errors</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--chart-ok)"></span>ok</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--chart-err)"></span>errors</span>
       </div>
     </div>
     <div class="panel-body">
@@ -128,18 +129,16 @@
         <h2 class="panel-title">Live now</h2>
         <div class="panel-sub">Initialized in last 4 hours</div>
       </div>
-      <span class="badge live"><span class="badge-dot"></span>{{ summary.connected }}</span>
+      <span class="badge live"><span class="badge-dot"></span><span id="live-count">{{ summary.connected }}</span></span>
     </div>
-    <div class="panel-body flush">
+    <div class="panel-body flush" id="live-now-body">
       {% if not summary.live_users %}
-        <div class="empty" style="margin:12px">No active connections right now.</div>
+        {{ ui.empty("No active connections right now.", margin="12px") }}
       {% else %}
       <div class="live-list">
         {% for u in summary.live_users %}
         <div class="live-item">
-          <div class="avatar" data-name="{{ u.user_name }}" style="width:26px;height:26px;font-size:11px">
-            {{ u.user_name[0].upper() }}
-          </div>
+          {{ ui.avatar(u.user_name, size=26, font=11) }}
           <div class="meta">
             <div class="name">{{ u.user_name }}</div>
             <div class="where">{{ u.editor }} · {{ u.calls_24h }} calls today</div>
@@ -161,7 +160,7 @@
   <div class="panel">
     <div class="panel-header">
       <div>
-        <h2 class="panel-title">Top tools (24h)</h2>
+        <h2 class="panel-title">Top tools ({{ window }})</h2>
         <div class="panel-sub">By call volume</div>
       </div>
       <a href="/dashboard/tools" class="btn btn-ghost" style="font-size:12px">
@@ -169,9 +168,9 @@
         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
       </a>
     </div>
-    <div class="panel-body flush">
+    <div class="panel-body flush" id="top-tools-body">
       {% if not summary.top_tools %}
-        <div class="empty" style="margin:8px">No tool calls in the last 24h.</div>
+        {{ ui.empty("No tool calls in this window.", margin="8px") }}
       {% else %}
         {% for t in summary.top_tools %}
         <div class="bar-row">
@@ -192,9 +191,9 @@
         <div class="panel-sub">By tool family</div>
       </div>
       <div class="legend">
-        <span class="legend-item"><span class="legend-dot" style="background:var(--indigo-500)"></span>search</span>
-        <span class="legend-item"><span class="legend-dot" style="background:var(--indigo-300)"></span>get</span>
-        <span class="legend-item"><span class="legend-dot" style="background:var(--indigo-100);border:1px solid var(--indigo-200)"></span>list</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--chart-cat-search)"></span>search</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--chart-cat-get)"></span>get</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--chart-cat-list)"></span>list</span>
       </div>
     </div>
     <div class="panel-body">
@@ -216,48 +215,11 @@
       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
     </a>
   </div>
-  <div class="panel-body flush">
+  <div class="panel-body flush" id="recent-activity-body">
     {% if not calls %}
-      <div class="empty" style="margin:8px">No tool calls recorded yet.</div>
+      {{ ui.empty("No tool calls recorded yet.", margin="8px") }}
     {% else %}
-    <table class="grid">
-      <thead>
-        <tr>
-          <th>When</th><th>User</th><th>Editor</th><th>Tool</th><th>Args</th>
-          <th class="num">Latency</th><th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for c in calls %}
-        <tr>
-          <td class="muted">{{ c.created_at | since }}</td>
-          <td>
-            <div class="user-cell">
-              <div class="avatar" data-name="{{ c.user_name }}" style="width:22px;height:22px;font-size:9px">
-                {{ c.user_name[0].upper() }}
-              </div>
-              <a href="/dashboard/users/{{ c.user_name }}">{{ c.user_name }}</a>
-            </div>
-          </td>
-          <td class="muted">{{ c.editor_name or " - " }}</td>
-          <td><code>{{ c.tool_name }}</code></td>
-          <td class="muted truncate">{{ c.args_summary }}</td>
-          <td class="num">{{ c.latency_ms }}ms</td>
-          <td>
-            {% if c.status == "ok" %}
-              <span class="badge green">ok</span>
-            {% elif c.status == "empty" %}
-              <span class="badge amber">empty</span>
-            {% elif c.status == "not_found" %}
-              <span class="badge amber">not found</span>
-            {% else %}
-              <span class="badge red">{{ c.status }}</span>
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    {{ ui.calls_table(calls, table_id="recent-calls-table") }}
     {% endif %}
   </div>
 </div>
@@ -269,105 +231,206 @@
 /* ── Chart data injected from server ─────────────────────── */
 var HOURLY = {{ hourly_json | safe }};
 var DAILY  = {{ daily_json | safe }};
+var WINDOW = "{{ window }}";
 
-/* ── Tiny SVG chart library ──────────────────────────────── */
+/* ── Schematic SVG charts + live polling ─────────────────── */
 (function () {
-
-  /* Helper: compute SVG path string from array of [x,y] points */
-  function pts2path(pts) {
-    return pts.map(function (p, i) {
-      return (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1);
-    }).join(' ');
-  }
+  var REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function svgEl(tag, attrs) {
     var el = document.createElementNS('http://www.w3.org/2000/svg', tag);
     Object.keys(attrs).forEach(function (k) { el.setAttribute(k, attrs[k]); });
     return el;
   }
+  function pts2path(pts) {
+    return pts.map(function (p, i) {
+      return (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1);
+    }).join(' ');
+  }
+  function niceMax(v) {
+    return v <= 5 ? 5 : v <= 10 ? 10 : v <= 20 ? 20 : Math.ceil(v / 5) * 5;
+  }
+  function tip(host) {
+    var t = host.querySelector('.chart-tip');
+    if (!t) {
+      t = document.createElement('div');
+      t.className = 'chart-tip';
+      host.appendChild(t);
+    }
+    return t;
+  }
+  function moveTip(host, t, px, py) {
+    var w = host.clientWidth;
+    t.style.display = 'block';
+    t.style.left = Math.min(px + 12, w - t.offsetWidth - 4) + 'px';
+    t.style.top = Math.max(py - t.offsetHeight - 10, 2) + 'px';
+  }
+  function tipRow(t, color, label, value) {
+    var row = document.createElement('div');
+    row.className = 'tip-row';
+    var dot = document.createElement('span');
+    dot.className = 'tip-dot';
+    dot.style.background = color;
+    var txt = document.createElement('span');
+    txt.textContent = label + ' ' + value;
+    row.appendChild(dot); row.appendChild(txt);
+    t.appendChild(row);
+  }
 
-  /* ── Area / line chart (hourly calls) ───────────────────── */
-  function drawAreaLine(containerId, data, series, height) {
-    var wrap = document.getElementById(containerId);
-    if (!wrap) return;
-    var pad = { l: 32, r: 8, t: 8, b: 22 };
-    var width = Math.max(wrap.clientWidth || wrap.offsetWidth || 600, 120);
-    height = Math.max(wrap.clientHeight || height || 180, 120);
-    var innerW = Math.max(50, width - pad.l - pad.r);
-    var innerH = Math.max(40, height - pad.t - pad.b);
-
-    var allVals = [];
-    series.forEach(function (s) { data.forEach(function (d) { allVals.push(d[s.key] || 0); }); });
-    var maxV = Math.max.apply(null, allVals.concat([1]));
-    /* Scale to data, not a fixed 50-bucket - avoids a tall empty chart */
-    var niceMax = maxV <= 5 ? 5
-      : maxV <= 10 ? 10
-      : maxV <= 20 ? 20
-      : Math.ceil(maxV / 5) * 5;
-    var yTicks = 4;
-
-    var stepX = innerW / (data.length - 1 || 1);
-    var toX = function (i) { return pad.l + i * stepX; };
-    var toY = function (v) { return pad.t + innerH - (v / niceMax) * innerH; };
-
-    var svg = svgEl('svg', { width: width, height: height, viewBox: '0 0 ' + width + ' ' + height });
-
-    /* Y grid */
-    for (var yi = 0; yi <= yTicks; yi++) {
-      var v = Math.round((niceMax / yTicks) * yi);
-      var gy = toY(v);
+  /* Fine drafting grid + labeled Y ticks */
+  function drawGrid(svg, pad, width, height, innerW, innerH, maxV, xSteps) {
+    var yTicks = 4, yi, gy, gx;
+    for (var xi = 0; xi <= xSteps; xi++) {
+      gx = pad.l + (innerW / xSteps) * xi;
+      svg.appendChild(svgEl('line', {
+        x1: gx, x2: gx, y1: pad.t, y2: pad.t + innerH,
+        stroke: 'var(--grid-line)', 'stroke-width': 1
+      }));
+    }
+    for (yi = 0; yi <= yTicks; yi++) {
+      var v = Math.round((maxV / yTicks) * yi);
+      gy = pad.t + innerH - (v / maxV) * innerH;
       svg.appendChild(svgEl('line', {
         x1: pad.l, x2: width - pad.r, y1: gy, y2: gy,
-        stroke: 'var(--border)', 'stroke-width': 1,
-        'stroke-dasharray': yi === 0 ? '0' : '2 4'
+        stroke: yi === 0 ? 'var(--grid-line-strong)' : 'var(--grid-line)',
+        'stroke-width': 1
       }));
       var lbl = svgEl('text', {
-        x: pad.l - 8, y: gy + 4, 'font-size': '10.5',
+        x: pad.l - 8, y: gy + 4, 'font-size': '10',
         fill: 'var(--text-subtle)', 'text-anchor': 'end',
         'font-family': 'var(--font-mono)'
       });
       lbl.textContent = v;
       svg.appendChild(lbl);
     }
+  }
 
-    /* X labels every 4th hour */
+  /* ── Area / line chart with crosshair + measurement guides ─ */
+  function drawAreaLine(containerId, data, series, height) {
+    var wrap = document.getElementById(containerId);
+    if (!wrap || !data.length) return;
+    wrap.innerHTML = '';
+    var pad = { l: 34, r: 10, t: 10, b: 22 };
+    var width = Math.max(wrap.clientWidth || 600, 120);
+    height = Math.max(wrap.clientHeight || height || 180, 120);
+    var innerW = Math.max(50, width - pad.l - pad.r);
+    var innerH = Math.max(40, height - pad.t - pad.b);
+
+    var allVals = [];
+    series.forEach(function (s) { data.forEach(function (d) { allVals.push(d[s.key] || 0); }); });
+    var maxV = niceMax(Math.max.apply(null, allVals.concat([1])));
+
+    var stepX = innerW / (data.length - 1 || 1);
+    var toX = function (i) { return pad.l + i * stepX; };
+    var toY = function (v) { return pad.t + innerH - (v / maxV) * innerH; };
+
+    var svg = svgEl('svg', { width: width, height: height, viewBox: '0 0 ' + width + ' ' + height });
+    drawGrid(svg, pad, width, height, innerW, innerH, maxV, Math.min(data.length - 1, 12) || 1);
+
+    /* X labels, thinned */
+    var every = Math.max(1, Math.ceil(data.length / 8));
     data.forEach(function (d, i) {
-      if (i % 4 !== 0) return;
+      if (i % every !== 0) return;
       var lbl = svgEl('text', {
-        x: toX(i), y: height - 4, 'font-size': '11',
+        x: toX(i), y: height - 4, 'font-size': '10',
         fill: 'var(--text-muted)', 'text-anchor': 'middle',
-        'font-family': 'var(--font-sans)'
+        'font-family': 'var(--font-mono)'
       });
-      lbl.textContent = String(d.h || i).padStart(2, '0') + ':00';
+      lbl.textContent = d.label || '';
       svg.appendChild(lbl);
     });
 
-    /* Series */
     series.forEach(function (s) {
       var pts = data.map(function (d, i) { return [toX(i), toY(d[s.key] || 0)]; });
       var lineD = pts2path(pts);
-      var areaD = lineD +
-        ' L' + toX(data.length - 1).toFixed(1) + ',' + toY(0).toFixed(1) +
-        ' L' + toX(0).toFixed(1) + ',' + toY(0).toFixed(1) + ' Z';
       if (s.fill) {
-        svg.appendChild(svgEl('path', { d: areaD, fill: s.fill, opacity: '0.5' }));
+        var areaD = lineD +
+          ' L' + toX(data.length - 1).toFixed(1) + ',' + toY(0).toFixed(1) +
+          ' L' + toX(0).toFixed(1) + ',' + toY(0).toFixed(1) + ' Z';
+        svg.appendChild(svgEl('path', { d: areaD, fill: s.fill }));
       }
-      svg.appendChild(svgEl('path', {
+      var line = svgEl('path', {
         d: lineD, fill: 'none', stroke: s.stroke,
         'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round'
-      }));
+      });
+      svg.appendChild(line);
+      if (!REDUCED) {
+        var len = line.getTotalLength ? 0 : 0;
+        try { len = line.getTotalLength(); } catch (e) { len = 0; }
+        if (len > 0) {
+          line.style.setProperty('--draw-len', len);
+          line.classList.add('chart-draw');
+        }
+      }
     });
 
-    wrap.innerHTML = '';
+    /* Hover layer: crosshair + dotted guides + tooltip */
+    var hover = svgEl('g', { 'pointer-events': 'none', visibility: 'hidden' });
+    var vline = svgEl('line', {
+      y1: pad.t, y2: pad.t + innerH,
+      stroke: 'var(--text-subtle)', 'stroke-width': 1, 'stroke-dasharray': '3 3'
+    });
+    hover.appendChild(vline);
+    var guides = series.map(function (s) {
+      var g = svgEl('line', {
+        x1: pad.l, stroke: s.stroke, 'stroke-width': 1, 'stroke-dasharray': '2 3', opacity: 0.7
+      });
+      hover.appendChild(g);
+      return g;
+    });
+    var dots = series.map(function (s) {
+      var c = svgEl('circle', { r: 3.5, fill: s.stroke, stroke: 'var(--bg-elevated)', 'stroke-width': 2 });
+      hover.appendChild(c);
+      return c;
+    });
+    svg.appendChild(hover);
+
+    var overlay = svgEl('rect', {
+      x: pad.l, y: pad.t, width: innerW, height: innerH, fill: 'transparent'
+    });
+    svg.appendChild(overlay);
+    var t = tip(wrap);
+
+    function onMove(evt) {
+      var rect = svg.getBoundingClientRect();
+      var mx = evt.clientX - rect.left;
+      var i = Math.round((mx - pad.l) / (stepX || 1));
+      i = Math.max(0, Math.min(data.length - 1, i));
+      var d = data[i];
+      var x = toX(i);
+      vline.setAttribute('x1', x); vline.setAttribute('x2', x);
+      series.forEach(function (s, si) {
+        var y = toY(d[s.key] || 0);
+        dots[si].setAttribute('cx', x); dots[si].setAttribute('cy', y);
+        guides[si].setAttribute('x2', x);
+        guides[si].setAttribute('y1', y); guides[si].setAttribute('y2', y);
+      });
+      hover.setAttribute('visibility', 'visible');
+      t.innerHTML = '';
+      var lab = document.createElement('span');
+      lab.className = 'tip-label';
+      lab.textContent = d.label || '';
+      t.appendChild(lab);
+      series.forEach(function (s) { tipRow(t, s.stroke, s.key, d[s.key] || 0); });
+      moveTip(wrap, t, x, toY(Math.max.apply(null, series.map(function (s) { return d[s.key] || 0; }))));
+    }
+    function onLeave() {
+      hover.setAttribute('visibility', 'hidden');
+      t.style.display = 'none';
+    }
+    overlay.addEventListener('mousemove', onMove);
+    overlay.addEventListener('mouseleave', onLeave);
+
     wrap.appendChild(svg);
   }
 
-  /* ── Stacked bar chart (7-day daily) ────────────────────── */
+  /* ── Stacked bars: 2px surface gaps, rounded data-end, hover ─ */
   function drawStackedBars(containerId, data, keys, colors, height) {
     var wrap = document.getElementById(containerId);
-    if (!wrap) return;
-    var pad = { l: 32, r: 8, t: 8, b: 22 };
-    var width = Math.max(wrap.clientWidth || wrap.offsetWidth || 400, 120);
+    if (!wrap || !data.length) return;
+    wrap.innerHTML = '';
+    var pad = { l: 34, r: 10, t: 8, b: 22 };
+    var width = Math.max(wrap.clientWidth || 400, 120);
     height = Math.max(wrap.clientHeight || height || 120, 100);
     var innerW = Math.max(50, width - pad.l - pad.r);
     var innerH = Math.max(40, height - pad.t - pad.b);
@@ -375,80 +438,267 @@ var DAILY  = {{ daily_json | safe }};
     var totals = data.map(function (d) {
       return keys.reduce(function (s, k) { return s + (d[k] || 0); }, 0);
     });
-    var maxV = Math.max.apply(null, totals.concat([1]));
-    var niceMax = maxV <= 5 ? 5
-      : maxV <= 10 ? 10
-      : maxV <= 20 ? 20
-      : Math.ceil(maxV / 5) * 5 || 5;
-    var yTicks = 4;
+    var maxV = niceMax(Math.max.apply(null, totals.concat([1])));
 
     var bandW = innerW / data.length;
-    var barW  = Math.min(34, bandW * 0.55);
+    var barW = Math.min(30, bandW * 0.5);
 
     var svg = svgEl('svg', { width: width, height: height });
+    drawGrid(svg, pad, width, height, innerW, innerH, maxV, data.length);
 
-    /* Y grid */
-    for (var yi = 0; yi <= yTicks; yi++) {
-      var v = Math.round((niceMax / yTicks) * yi);
-      var gy = pad.t + innerH - (v / niceMax) * innerH;
-      svg.appendChild(svgEl('line', {
-        x1: pad.l, x2: width - pad.r, y1: gy, y2: gy,
-        stroke: 'var(--border)', 'stroke-dasharray': yi === 0 ? '0' : '2 4'
-      }));
-      var lbl = svgEl('text', {
-        x: pad.l - 8, y: gy + 4, 'font-size': '10.5',
-        fill: 'var(--text-subtle)', 'text-anchor': 'end',
-        'font-family': 'var(--font-mono)'
-      });
-      lbl.textContent = v;
-      svg.appendChild(lbl);
-    }
+    var t = tip(wrap);
 
-    /* Bars */
     data.forEach(function (d, i) {
       var cx = pad.l + bandW * i + bandW / 2;
       var cy = pad.t + innerH;
+      var segs = [];
       keys.forEach(function (k, ki) {
         var val = d[k] || 0;
-        var hPx = (val / niceMax) * innerH;
+        if (!val) return;
+        var hPx = (val / maxV) * innerH;
         cy -= hPx;
-        svg.appendChild(svgEl('rect', {
-          x: cx - barW / 2, y: cy, width: barW, height: hPx,
-          fill: colors[ki], rx: ki === keys.length - 1 ? '3' : '0'
-        }));
+        segs.push({ k: k, ki: ki, y: cy, h: hPx });
       });
+      segs.forEach(function (s, si) {
+        var isTop = si === segs.length - 1;
+        var gap = si > 0 ? 1 : 0;   /* 2px visual gap = 1px shaved off both segs */
+        var rect = svgEl('rect', {
+          x: cx - barW / 2,
+          y: s.y + gap,
+          width: barW,
+          height: Math.max(1, s.h - gap - (isTop ? 0 : 1)),
+          fill: colors[s.ki],
+          rx: isTop ? '4' : '0'
+        });
+        svg.appendChild(rect);
+      });
+      /* per-band hover target */
+      var hit = svgEl('rect', {
+        x: pad.l + bandW * i, y: pad.t, width: bandW, height: innerH, fill: 'transparent'
+      });
+      hit.addEventListener('mousemove', function (evt) {
+        t.innerHTML = '';
+        var lab = document.createElement('span');
+        lab.className = 'tip-label';
+        lab.textContent = d.label || '';
+        t.appendChild(lab);
+        for (var ki = keys.length - 1; ki >= 0; ki--) {
+          tipRow(t, colors[ki], keys[ki], d[keys[ki]] || 0);
+        }
+        moveTip(wrap, t, cx, pad.t + 10);
+      });
+      hit.addEventListener('mouseleave', function () { t.style.display = 'none'; });
+      svg.appendChild(hit);
+
       var lbl = svgEl('text', {
-        x: cx, y: height - 4, 'font-size': '11',
+        x: cx, y: height - 4, 'font-size': '10',
         fill: 'var(--text-muted)', 'text-anchor': 'middle',
-        'font-family': 'var(--font-sans)'
+        'font-family': 'var(--font-mono)'
       });
       lbl.textContent = d.label || '';
       svg.appendChild(lbl);
     });
 
-    wrap.innerHTML = '';
     wrap.appendChild(svg);
   }
 
-  /* ── Render both charts ─────────────────────────────────── */
-  function render() {
-    drawAreaLine('chart-hourly', HOURLY, [
-      { key: 'ok',  stroke: 'var(--indigo-500)', fill: 'var(--indigo-100)' },
-      { key: 'err', stroke: 'var(--red-500)',    fill: 'var(--red-100)' }
-    ], 180);
-
-    drawStackedBars('chart-daily', DAILY,
-      ['list', 'get', 'search'],
-      ['var(--indigo-100)', 'var(--indigo-300)', 'var(--indigo-500)'],
-      120);
+  /* ── KPI sparkline (totals over the window) ─────────────── */
+  function drawSparkline(containerId, data) {
+    var wrap = document.getElementById(containerId);
+    if (!wrap || !data.length) return;
+    wrap.innerHTML = '';
+    var w = wrap.clientWidth || 72, h = wrap.clientHeight || 24;
+    var maxV = Math.max.apply(null, data.map(function (d) { return d.total || 0; }).concat([1]));
+    var stepX = w / (data.length - 1 || 1);
+    var pts = data.map(function (d, i) {
+      return [i * stepX, h - 2 - ((d.total || 0) / maxV) * (h - 4)];
+    });
+    var svg = svgEl('svg', { width: w, height: h, viewBox: '0 0 ' + w + ' ' + h });
+    svg.appendChild(svgEl('path', {
+      d: pts2path(pts), fill: 'none', stroke: 'var(--chart-ok)',
+      'stroke-width': '1.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+      opacity: 0.8
+    }));
+    wrap.appendChild(svg);
   }
 
-  /* Render once on load, re-render on resize */
+  function render() {
+    drawAreaLine('chart-hourly', HOURLY, [
+      { key: 'ok',  stroke: 'var(--chart-ok)',  fill: 'var(--chart-ok-fill)' },
+      { key: 'err', stroke: 'var(--chart-err)', fill: 'var(--chart-err-fill)' }
+    ], 180);
+    drawStackedBars('chart-daily', DAILY,
+      ['list', 'get', 'search'],
+      ['var(--chart-cat-list)', 'var(--chart-cat-get)', 'var(--chart-cat-search)'],
+      120);
+    drawSparkline('spark-calls', HOURLY);
+  }
+
   render();
   var resizeTimer;
   window.addEventListener('resize', function () {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(render, 120);
+  });
+
+  /* ── Live polling (30s) ─────────────────────────────────── */
+  function since(iso) {
+    if (!iso) return ' - ';
+    var s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return Math.floor(s) + 's ago';
+    if (s < 3600) return Math.floor(s / 60) + 'm ago';
+    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+    return Math.floor(s / 86400) + 'd ago';
+  }
+  function hashHue(name) {
+    var h = 0;
+    for (var i = 0; i < name.length; i++) h += name.charCodeAt(i);
+    return h % 360;
+  }
+  function avatarEl(name, size, font) {
+    var el = document.createElement('div');
+    el.className = 'avatar';
+    el.style.width = size + 'px'; el.style.height = size + 'px';
+    el.style.fontSize = font + 'px';
+    var hue = hashHue(name), hue2 = (hue + 30) % 360;
+    el.style.background = 'linear-gradient(135deg, hsl(' + hue + ' 65% 70%), hsl(' + hue2 + ' 60% 50%))';
+    el.textContent = (name[0] || '?').toUpperCase();
+    return el;
+  }
+  function setText(id, value) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+  function statusBadge(status) {
+    var span = document.createElement('span');
+    var cls = status === 'ok' ? 'green' : (status === 'empty' || status === 'not_found') ? 'amber' : 'red';
+    span.className = 'badge ' + cls;
+    span.textContent = status === 'not_found' ? 'not found' : status;
+    return span;
+  }
+
+  function patchLive(users) {
+    var body = document.getElementById('live-now-body');
+    if (!body) return;
+    body.innerHTML = '';
+    if (!users.length) {
+      var e = document.createElement('div');
+      e.className = 'empty'; e.style.margin = '12px';
+      e.textContent = 'No active connections right now.';
+      body.appendChild(e);
+      return;
+    }
+    var listEl = document.createElement('div');
+    listEl.className = 'live-list';
+    users.forEach(function (u) {
+      var item = document.createElement('div');
+      item.className = 'live-item';
+      item.appendChild(avatarEl(u.user_name, 26, 11));
+      var meta = document.createElement('div');
+      meta.className = 'meta';
+      var name = document.createElement('div');
+      name.className = 'name'; name.textContent = u.user_name;
+      var where = document.createElement('div');
+      where.className = 'where';
+      where.textContent = u.editor + ' \u00b7 ' + u.calls_24h + ' calls today';
+      meta.appendChild(name); meta.appendChild(where);
+      var when = document.createElement('span');
+      when.className = 'when'; when.textContent = since(u.last_call);
+      item.appendChild(meta); item.appendChild(when);
+      listEl.appendChild(item);
+    });
+    body.appendChild(listEl);
+  }
+
+  function patchTopTools(tools) {
+    var body = document.getElementById('top-tools-body');
+    if (!body) return;
+    body.innerHTML = '';
+    if (!tools.length) {
+      var e = document.createElement('div');
+      e.className = 'empty'; e.style.margin = '8px';
+      e.textContent = 'No tool calls in this window.';
+      body.appendChild(e);
+      return;
+    }
+    tools.forEach(function (tItem) {
+      var row = document.createElement('div');
+      row.className = 'bar-row';
+      var name = document.createElement('span');
+      name.className = 'name'; name.textContent = tItem.tool;
+      var bar = document.createElement('div');
+      bar.className = 'bar';
+      var fill = document.createElement('div');
+      fill.className = 'bar-fill';
+      fill.style.width = (tItem.share * 100).toFixed(1) + '%';
+      bar.appendChild(fill);
+      var count = document.createElement('span');
+      count.className = 'count'; count.textContent = tItem.calls;
+      row.appendChild(name); row.appendChild(bar); row.appendChild(count);
+      body.appendChild(row);
+    });
+  }
+
+  function patchRecent(calls) {
+    var table = document.getElementById('recent-calls-table');
+    if (!table || !calls.length) return;
+    var tbody = table.querySelector('tbody');
+    tbody.innerHTML = '';
+    calls.forEach(function (c) {
+      var tr = document.createElement('tr');
+      tr.dataset.status = c.status;
+      function td(cls) {
+        var cell = document.createElement('td');
+        if (cls) cell.className = cls;
+        tr.appendChild(cell);
+        return cell;
+      }
+      var when = td('muted mono'); when.style.fontSize = '12px';
+      when.textContent = since(c.created_at);
+      var user = td('');
+      var cellWrap = document.createElement('div');
+      cellWrap.className = 'user-cell';
+      cellWrap.appendChild(avatarEl(c.user_name, 22, 9));
+      var a = document.createElement('a');
+      a.href = '/dashboard/users/' + encodeURIComponent(c.user_name);
+      a.textContent = c.user_name;
+      cellWrap.appendChild(a);
+      user.appendChild(cellWrap);
+      td('muted').textContent = c.editor_name || ' - ';
+      var toolCell = td('');
+      var code = document.createElement('code');
+      code.textContent = c.tool_name;
+      toolCell.appendChild(code);
+      td('muted truncate').textContent = c.args_summary || '';
+      td('num').textContent = c.latency_ms + 'ms';
+      td('').appendChild(statusBadge(c.status));
+      tbody.appendChild(tr);
+    });
+  }
+
+  function poll() {
+    if (document.hidden) return;
+    fetch('/dashboard/api/summary?window=' + encodeURIComponent(WINDOW), { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data) return;
+        HOURLY = data.hourly;
+        DAILY = data.daily;
+        setText('kpi-connected', data.connected);
+        setText('sub-connected', data.connected);
+        setText('live-count', data.connected);
+        setText('kpi-calls', data.calls_today);
+        setText('kpi-zero', data.zero_today);
+        patchLive(data.live_users || []);
+        patchTopTools(data.top_tools || []);
+        patchRecent(data.recent_calls || []);
+        render();
+      })
+      .catch(function () { /* transient network error - next poll retries */ });
+  }
+  setInterval(poll, 30000);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) poll();
   });
 
 })();

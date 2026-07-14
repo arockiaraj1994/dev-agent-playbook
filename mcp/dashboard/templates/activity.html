@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_macros.html" as ui %}
 {% block title %}Activity - {{ server_label }}{% endblock %}
 {% block crumb %}Recent activity{% endblock %}
 
@@ -33,53 +34,11 @@
 </div>
 
 {% if not calls %}
-  <div class="empty">No tool calls recorded yet.</div>
+  {{ ui.empty("No tool calls recorded yet.") }}
 {% else %}
 <div class="panel">
   <div class="panel-body flush">
-    <table class="grid" id="activity-table">
-      <thead>
-        <tr>
-          <th>When</th>
-          <th>User</th>
-          <th>Editor</th>
-          <th>Tool</th>
-          <th>Args</th>
-          <th class="num">Latency</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for c in calls %}
-        <tr data-status="{{ c.status }}">
-          <td class="muted">{{ c.created_at | since }}</td>
-          <td>
-            <div class="user-cell">
-              <div class="avatar" data-name="{{ c.user_name }}" style="width:22px;height:22px;font-size:9px">
-                {{ c.user_name[0].upper() }}
-              </div>
-              <a href="/dashboard/users/{{ c.user_name }}">{{ c.user_name }}</a>
-            </div>
-          </td>
-          <td class="muted">{{ c.editor_name or " - " }}</td>
-          <td><code>{{ c.tool_name }}</code></td>
-          <td class="muted truncate">{{ c.args_summary }}</td>
-          <td class="num">{{ c.latency_ms }}ms</td>
-          <td>
-            {% if c.status == "ok" %}
-              <span class="badge green">ok</span>
-            {% elif c.status == "empty" %}
-              <span class="badge amber">empty</span>
-            {% elif c.status == "not_found" %}
-              <span class="badge amber">not found</span>
-            {% else %}
-              <span class="badge red">{{ c.status }}</span>
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    {{ ui.calls_table(calls, table_id="activity-table") }}
   </div>
 </div>
 {% endif %}
@@ -94,5 +53,6 @@ initTableFilter({
   tableId: 'activity-table',
   statusAttr: 'status'
 });
+initTableSort('activity-table');
 </script>
 {% endblock %}

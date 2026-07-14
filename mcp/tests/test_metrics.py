@@ -287,11 +287,12 @@ async def test_list_tool_stats_aggregates(store: MetricsStore) -> None:
         tool_name="get_pattern", latency_ms=99, **{**common, "status": "not_found"}
     )
     stats = await store.list_tool_stats(window_days=7)
+    # Legacy names fold onto the canonical playbook_* names for display.
     by_tool = {s.tool_name: s for s in stats}
-    assert by_tool["search_rules"].calls == 5
-    assert by_tool["search_rules"].error_count == 0
-    assert 25 <= by_tool["search_rules"].p50_latency_ms <= 35
-    assert by_tool["get_pattern"].error_count == 1
+    assert by_tool["playbook_search_docs"].calls == 5
+    assert by_tool["playbook_search_docs"].error_count == 0
+    assert 25 <= by_tool["playbook_search_docs"].p50_latency_ms <= 35
+    assert by_tool["playbook_get_doc"].error_count == 1
 
 
 async def test_list_doc_fetches(store: MetricsStore) -> None:
