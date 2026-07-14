@@ -154,10 +154,21 @@ def build_dashboard_routes(
 
     # -- Read-only views -----------------------------------------------------
 
+    _WINDOWS = {"24h": 1, "7d": 7, "30d": 30}
+
+    def _window_days(request: Request) -> tuple[str, int]:
+        window = str(request.query_params.get("window", "24h"))
+        if window not in _WINDOWS:
+            window = "24h"
+        return window, _WINDOWS[window]
+
     async def dashboard_view(request: Request) -> Response:
         import json as _json
 
-        summary = await store.dashboard_summary(inactive_days=inactive_days)
+        window, window_days = _window_days(request)
+        summary = await store.dashboard_summary(
+            inactive_days=inactive_days, window_days=window_days
+        )
         calls = await store.list_recent_calls(limit=8)
         return templates.TemplateResponse(
             request,
@@ -166,10 +177,49 @@ def build_dashboard_routes(
                 request,
                 summary=summary,
                 calls=calls,
+                window=window,
                 hourly_json=_json.dumps(summary.hourly),
                 daily_json=_json.dumps(summary.daily),
                 page="dashboard",
             ),
+        )
+
+    async def summary_api(request: Request) -> Response:
+        """Live-dashboard poll: KPIs, chart series, live users, recent calls."""
+        window, window_days = _window_days(request)
+        summary = await store.dashboard_summary(
+            inactive_days=inactive_days, window_days=window_days
+        )
+        calls = await store.list_recent_calls(limit=8)
+        return JSONResponse(
+            {
+                "window": window,
+                "connected": summary.connected,
+                "calls_today": summary.calls_today,
+                "calls_trend": summary.calls_trend,
+                "zero_today": summary.zero_today,
+                "zero_trend": summary.zero_trend,
+                "configured": summary.configured,
+                "active": summary.active,
+                "inactive": summary.inactive,
+                "never_called": summary.never_called,
+                "hourly": summary.hourly,
+                "daily": summary.daily,
+                "live_users": summary.live_users,
+                "top_tools": summary.top_tools,
+                "recent_calls": [
+                    {
+                        "created_at": c.created_at,
+                        "user_name": c.user_name,
+                        "editor_name": c.editor_name,
+                        "tool_name": c.tool_name,
+                        "args_summary": c.args_summary,
+                        "latency_ms": c.latency_ms,
+                        "status": c.status,
+                    }
+                    for c in calls
+                ],
+            }
         )
 
     async def users_view(request: Request) -> Response:
@@ -266,6 +316,30 @@ def build_dashboard_routes(
 
     async def guide_view(request: Request) -> Response:
         return templates.TemplateResponse(request, "guide.html", _ctx(request, page="guide"))
+
+    async def palette_api(request: Request) -> Response:
+        """Index for the ⌘K command palette: projects, users, quick-action data."""
+        principal = scope_principal(request.scope)
+        is_admin = principal is not None and getattr(principal, "role", "user") == "admin"
+        projects: list[str] = []
+        req_projects: list[str] = []
+        if rules_store is not None:
+            try:
+                projects = list(rules_store.projects(corpus="standards"))
+                req_projects = list(rules_store.projects(corpus="requirements"))
+            except TypeError:
+                projects = list(rules_store.projects())
+        users = await store.list_users(inactive_days=inactive_days)
+        base = str(request.base_url).rstrip("/")
+        return JSONResponse(
+            {
+                "projects": projects,
+                "requirement_projects": req_projects,
+                "users": [u.user_name for u in users][:50],
+                "sse_url": f"{base}/sse",
+                "is_admin": is_admin,
+            }
+        )
 
     # -- Standards + Requirements (corpus health) ----------------------------
 
@@ -690,6 +764,8 @@ def build_dashboard_routes(
         Route("/requirements/{name}", endpoint=requirement_detail_view, methods=["GET"]),
         Route("/reload", endpoint=reload_requirements, methods=["POST"]),
         Route("/api/me/last-call", endpoint=setup_last_call_api, methods=["GET"]),
+        Route("/api/palette", endpoint=palette_api, methods=["GET"]),
+        Route("/api/summary", endpoint=summary_api, methods=["GET"]),
         Route("/tokens", endpoint=tokens_view, methods=["GET"]),
         Route("/tokens/generate", endpoint=tokens_generate, methods=["POST"]),
         Route("/tokens/revoke", endpoint=tokens_revoke, methods=["POST"]),

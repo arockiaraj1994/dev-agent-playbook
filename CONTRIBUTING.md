@@ -112,16 +112,16 @@ Recognized fields:
 | Field | Type | Used for |
 |-------|------|----------|
 | `title` | string | Display name; weighted 2× in BM25 search. |
-| `description` | string | Short summary returned by `find_rules` and rendered into `INDEX.md`. |
+| `description` | string | Short summary returned by `playbook_search_docs` and rendered into `INDEX.md`. |
 | `tags` | list of strings | Weighted 2× in BM25 search. |
 | `applies_to` | list of strings | Project scopes; informational for now. |
-| `triggers` | list of strings | Natural-language task triggers used by `start_task`, `find_rules`, and the `INDEX.md` generator. Workflows and skills should set this. |
+| `triggers` | list of strings | Natural-language task triggers used by `playbook_start_task`, `playbook_search_docs`, and the `INDEX.md` generator. Workflows and skills should set this. |
 | `see_also` | list of strings | `<kind>:<name>` entries - rendered as `## Next Calls` on tool fetches. See below. |
 | `language` | string | Set automatically for `languages/<lang>/*.md`; can be set explicitly for other docs that target one language. |
 | `gates` | list of strings | On workflows: which `verify-*.sh` gate(s) close out the task. |
 
 Unknown keys are ignored. No frontmatter at all is fine, but workflows and
-skills without `triggers` won't be discoverable through `start_task`.
+skills without `triggers` won't be discoverable through `playbook_start_task`.
 
 ### `see_also` - how a doc chains forward
 
@@ -131,18 +131,19 @@ call in a `## Next Calls` block appended to the doc. **A doc with no
 
 | Kind | Example | Renders as |
 |------|---------|------------|
-| `tool` | `tool:start_task` | `start_task(project=…, task=…)` |
-| `pattern` | `pattern:error-handling` | `get_doc(kind="pattern", name=…)` |
-| `skill` | `skill:debug-route` | `get_doc(kind="skill", name=…)` |
-| `workflow` | `workflow:bug-fix` | `get_doc(kind="workflow", name=…)` |
-| `gate` | `gate:verify-java` | `get_doc(kind="gate", name=…)` |
-| `language` | `language:java/standards` | `get_doc(kind="language", name="java", doc="standards")` |
-| `architecture` | `architecture:0007-use-sftp` | `get_doc(kind="architecture", name=…)` |
-| `core` | `core:guardrails` | `get_doc(kind="guardrails")` |
-| `requirement` | `requirement:ST-101` | `get_doc(kind="requirement", name="ST-101")` |
+| `tool` | `tool:playbook_start_task` | `playbook_start_task(project=…, task=…)` |
+| `pattern` | `pattern:error-handling` | `playbook_get_doc(kind="pattern", name=…)` |
+| `skill` | `skill:debug-route` | `playbook_get_doc(kind="skill", name=…)` |
+| `workflow` | `workflow:bug-fix` | `playbook_get_doc(kind="workflow", name=…)` |
+| `gate` | `gate:verify-java` | `playbook_get_doc(kind="gate", name=…)` |
+| `language` | `language:java/standards` | `playbook_get_doc(kind="language", name="java", section="standards")` |
+| `architecture` | `architecture:0007-use-sftp` | `playbook_get_doc(kind="architecture", name=…)` |
+| `core` | `core:guardrails` | `playbook_get_doc(kind="guardrails")` |
+| `requirement` | `requirement:ST-101` | `playbook_get_doc(kind="requirement", name="ST-101")` |
 
-Valid `tool:` names are `start_task`, `get_guardrails` / `get_doc`, `find_rules`,
-`list_projects`, `list_requirements`, and `start_requirement`. Any other kind
+Valid `tool:` names are `playbook_start_task`, `playbook_get_doc`, `playbook_search_docs`,
+`playbook_list_requirements`, and `playbook_start_requirement` (pre-0.7.0 names such as
+`start_task` or `get_guardrails` are still accepted and render as the new ones). Any other kind
 or tool name is a **validation error** - `validate-rules.py` rejects it,
 because an unrecognized entry renders as nothing at all and the dead link is
 otherwise invisible.

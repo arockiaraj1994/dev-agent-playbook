@@ -1,15 +1,14 @@
 """
 server.py - Dev Playbook MCP Server (SSE only; read-only rules + usage metrics).
 
-Tools (6, all read-only):
- - start_task - THE entry point: identity + guardrails + workflow + next_calls
-                           (project optional; + optional requirement= for PRD/story tree walk)
- - list_projects
- - find_rules - list docs (no query) or BM25 search (with query); corpus= filter
- - get_doc - unified fetch by kind= (agents|guardrails|architecture|language|
+Tools (5, all read-only, playbook_ namespaced):
+ - playbook_start_task - THE entry point: identity + guardrails + workflow +
+                           next_calls (+ optional requirement= for PRD/story tree walk)
+ - playbook_search_docs - list docs (no query) or search (with query); corpus= filter
+ - playbook_get_doc - unified fetch by kind= (agents|guardrails|architecture|language|
                            pattern|skill|workflow|gate|requirement)
- - list_requirements - catalogue PRDs/stories
- - start_requirement - PM authoring bootstrap
+ - playbook_list_requirements - catalogue PRDs/stories
+ - playbook_start_requirement - PM authoring bootstrap
 
 Run:
   uv run server.py
@@ -87,7 +86,6 @@ from search import RulesSearchEngine
 from session import DashboardSession
 from tools import READ_ONLY
 from tools import docs as _docs_mod
-from tools import projects as _projects_mod
 from tools import requirements as _requirements_mod
 from tools import search_tool as _search_mod
 from tools import start_task as _start_task_mod
@@ -104,7 +102,7 @@ logging.basicConfig(
 logger = logging.getLogger("dev-playbook")
 
 SERVER_LABEL = os.getenv("MCP_SERVER_LABEL", "dev-playbook")
-SERVER_VERSION = "0.6.0"
+SERVER_VERSION = "0.7.0"
 DEFAULT_PORT = 3000
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_INACTIVE_DAYS = 2
@@ -173,7 +171,6 @@ metrics_store: MetricsStore | None = None
 server = Server(SERVER_LABEL)
 
 _TOOL_MODULES = [
-    _projects_mod,
     _start_task_mod,
     _docs_mod,
     _search_mod,
@@ -361,11 +358,22 @@ def load_mcp_config() -> McpConfig:
     )
 
 
+SERVER_INSTRUCTIONS = (
+    "Development-standards playbook server. For any coding task, call "
+    "playbook_start_task first - it returns guardrails, the matched workflow, "
+    "and exact next calls. For authoring PRDs/stories, start with "
+    "playbook_start_requirement. Fetch specific docs with playbook_get_doc; "
+    "discover them with playbook_search_docs. Always pass the basename of the "
+    "user's workspace directory as `project`."
+)
+
+
 def _initialization_options() -> InitializationOptions:
     return InitializationOptions(
         server_name=SERVER_LABEL,
         server_version=SERVER_VERSION,
         capabilities=ServerCapabilities(tools={}),
+        instructions=SERVER_INSTRUCTIONS,
     )
 
 
@@ -392,6 +400,8 @@ _PUBLIC_PATHS = frozenset(
         "/.well-known/oauth-authorization-server",
     ]
 )
+# Static assets (css/js) are public - the login page needs them pre-auth.
+_PUBLIC_PATH_PREFIXES = ("/dashboard/static/",)
 
 
 def _is_dashboard_path(path: str) -> bool:
@@ -479,7 +489,7 @@ class AppAuthMiddleware:
         path = scope.get("path", "")
 
         # Public paths: no auth required
-        if path in _PUBLIC_PATHS:
+        if path in _PUBLIC_PATHS or any(path.startswith(p) for p in _PUBLIC_PATH_PREFIXES):
             return Principal(user_id="public", user_name="public", role="user")
 
         # MCP paths: Bearer token only

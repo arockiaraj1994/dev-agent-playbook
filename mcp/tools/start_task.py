@@ -1,8 +1,7 @@
 """tools/start_task.py - One-call orientation for AI agents.
 
-`start_task(task, project?, requirement?)` is the canonical first call for any
-task. `project` is optional when exactly one standards project exists.
-It returns a single bundle containing:
+`playbook_start_task(project, task, requirement?)` is the canonical first call
+for any coding task. It returns a single bundle containing:
 
   1. The project's IDENTITY section, lifted from AGENTS.md.
   2. The project's always-on rules (core/guardrails.md + core/definition-of-done.md).
@@ -11,7 +10,8 @@ It returns a single bundle containing:
   4. The matched workflow doc (chosen by `triggers:` frontmatter, with BM25
      fallback when no trigger matches).
   5. A `## Next Calls` section from the workflow's `see_also:` and, when a
-     story is linked, from the story's `targets:` - all as `get_doc(kind=…)`.
+     story is linked, from the story's `targets:` - all as
+     `playbook_get_doc(kind=…)`.
 """
 
 from __future__ import annotations
@@ -23,58 +23,50 @@ from mcp.types import TextContent, Tool
 from loader import RuleDoc, RulesStore
 from search import RulesSearchEngine
 
+from . import PROJECT_PARAM_DESC
 from .docs import _next_calls_lines, _render_next_calls, _resolve_project
 from .requirements import _meta_str, _prd_summary, _title
 
 DEFINITIONS: list[Tool] = [
     Tool(
-        name="start_task",
+        name="playbook_start_task",
         description=(
-            "ALWAYS call this FIRST for any coding task - before get_doc or any "
-            "other tool. Pass a free-form sentence describing what the user "
-            "asked for. CRITICAL: `project` MUST be the basename of the user's "
-            "current workspace directory (never invent another project). "
-            "Optional only when exactly one standards project exists. "
-            "Optionally pass requirement=ST-114 or requirement=PRD-003 to pull "
-            "the linked requirement into the bundle. Returns: identity + "
-            "always-on guardrails + (optional) requirement + matched workflow "
-            "+ Next Calls."
+            "Entry point for any coding task - call this before other "
+            "playbook tools. Returns one bundle: project identity, always-on "
+            "guardrails and definition of done, the linked requirement (when "
+            "`requirement` is given), the workflow matched to `task`, and a "
+            "Next Calls list of follow-up playbook_get_doc calls."
         ),
         inputSchema={
             "type": "object",
             "properties": {
                 "project": {
                     "type": "string",
-                    "description": (
-                        "Basename of the user's current workspace directory "
-                        "(e.g. cwd .../NexRe → \"nexre\" or \"NexRe\"). "
-                        "Case-insensitive. NEVER substitute a different "
-                        "project. Inferred only when exactly one standards "
-                        "project exists."
-                    ),
+                    "description": PROJECT_PARAM_DESC,
                 },
                 "task": {
                     "type": "string",
                     "description": (
-                        "Free-form task description (e.g. 'fix a bug in the SFTP route' "
-                        "or 'add a new connector for Quarkus')."
+                        "What the user asked for, as a free-form sentence "
+                        "(e.g. 'fix a bug in the SFTP route' or "
+                        "'add a new connector for Quarkus')."
                     ),
                 },
                 "requirement": {
                     "type": "string",
                     "description": (
-                        "Optional requirement id: ST-114 or PRD-003. "
-                        "Server resolves the tree (story→PRD or PRD→stories) "
-                        "in one call."
+                        "Requirement id to include, e.g. ST-114 or PRD-003. "
+                        "A story arrives with its parent PRD summary; "
+                        "a PRD with its story list."
                     ),
                 },
             },
-            "required": ["task"],
+            "required": ["project", "task"],
         },
     ),
 ]
 
-_NAMES = {"start_task"}
+_NAMES = {"playbook_start_task"}
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +127,10 @@ def _identity_section(agents: RuleDoc | None, max_chars: int = 1200) -> str:
     if not body:
         return ""
     if len(body) > max_chars:
-        body = body[:max_chars].rstrip() + "\n\n_(truncated - call get_agents_md for the rest)_"
+        body = (
+            body[:max_chars].rstrip()
+            + '\n\n_(truncated - call playbook_get_doc(kind="agents") for the rest)_'
+        )
     return body
 
 
@@ -172,7 +167,7 @@ def _requirement_bundle(
     doc = store.find_by_id("requirements", project, req_id)
     if not doc:
         return (
-            f"Requirement '{req_id}' not found in {project}. Call list_requirements.",
+            f"Requirement '{req_id}' not found in {project}. Call playbook_list_requirements.",
             "not_found",
             [],
         )
@@ -236,7 +231,7 @@ def _bundle_text(
     requirement_md: str | None = None,
     target_lines: list[str] | None = None,
 ) -> str:
-    parts: list[str] = [f"# start_task - {project}\n\n_Task:_ {task}\n"]
+    parts: list[str] = [f"# playbook_start_task - {project}\n\n_Task:_ {task}\n"]
 
     if identity:
         parts.append(identity)
@@ -264,7 +259,7 @@ def _bundle_text(
     else:
         parts.append(
             "## Matched workflow\n\n"
-            '_No workflow matched. Try `find_rules(project="' + project + '")` '
+            '_No workflow matched. Try `playbook_search_docs(project="' + project + '")` '
             "to list the available docs._"
         )
 

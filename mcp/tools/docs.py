@@ -1,15 +1,15 @@
-"""tools/docs.py - Unified get_doc MCP tool.
+"""tools/docs.py - Unified playbook_get_doc MCP tool.
 
 One tool replaces the former get_agents_md / get_guardrails / get_architecture /
 get_language_rules / get_pattern / get_skill / get_workflow / get_gate /
 get_requirement surface:
 
-  get_doc(kind=..., project?, name?, doc?, depth?)
+  playbook_get_doc(kind=..., project=..., name?, section?, depth?)
 
 Corpus is implied by kind (`requirement` → requirements; everything else →
 standards). Each return body is the doc content plus, if the doc declares
 `see_also` / `targets` in frontmatter, a `## Next Calls` section that names
-the exact `get_doc(...)` calls the agent should make next.
+the exact `playbook_get_doc(...)` calls the agent should make next.
 """
 
 from __future__ import annotations
@@ -20,6 +20,8 @@ from mcp.types import TextContent, Tool
 
 from loader import SEE_ALSO_CORE, SEE_ALSO_TOOLS, RuleDoc, RulesStore, resolve_rules_root
 from search import RulesSearchEngine
+
+from . import PROJECT_PARAM_DESC
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +47,13 @@ _DEPTHS = ["self", "with_parent", "with_children"]
 
 DEFINITIONS: list[Tool] = [
     Tool(
-        name="get_doc",
+        name="playbook_get_doc",
         description=(
-            "Fetch one standards or requirement doc by kind. Not the entry "
-            "point - use start_task first for coding tasks. `name` identifies "
-            "the doc within its kind; `project` is optional when a single "
-            "project exists. Corpus is implied by kind."
+            "Fetch one doc by kind: a standards doc (agents, guardrails, "
+            "architecture, language, pattern, skill, workflow, gate) or a "
+            "requirement (PRD/story). Use it to follow the Next Calls other "
+            "tools return; to discover docs, use playbook_search_docs. "
+            "Returns the doc body plus its own Next Calls."
         ),
         inputSchema={
             "type": "object",
@@ -65,13 +68,7 @@ DEFINITIONS: list[Tool] = [
                 },
                 "project": {
                     "type": "string",
-                    "description": (
-                        "Basename of the user's current workspace directory "
-                        "(case-insensitive match to standards/). NEVER invent "
-                        "another project. Inferred when one standards project "
-                        "exists. kind=requirement: may omit to search all "
-                        "requirements projects by id."
-                    ),
+                    "description": PROJECT_PARAM_DESC,
                 },
                 "name": {
                     "type": "string",
@@ -82,11 +79,11 @@ DEFINITIONS: list[Tool] = [
                         "language, pattern, skill, workflow, requirement."
                     ),
                 },
-                "doc": {
+                "section": {
                     "type": "string",
                     "description": (
-                        "kind=language only: standards | testing | anti-patterns "
-                        "(default: standards)."
+                        "kind=language only: which language doc - standards | "
+                        "testing | anti-patterns (default: standards)."
                     ),
                     "enum": _LANGUAGE_DOCS,
                     "default": "standards",
@@ -95,13 +92,14 @@ DEFINITIONS: list[Tool] = [
                     "type": "string",
                     "description": (
                         "kind=requirement only: self (default) | with_parent "
-                        "(story to PRD) | with_children (PRD to stories)."
+                        "(story + parent PRD summary) | with_children "
+                        "(PRD + story list)."
                     ),
                     "enum": _DEPTHS,
                     "default": "self",
                 },
             },
-            "required": ["kind"],
+            "required": ["kind", "project"],
         },
     ),
 ]
@@ -180,7 +178,7 @@ def _resolve_project(
                 "`project` must be the basename of your current workspace "
                 "directory (matched to a standards/ folder). Available:\n"
                 f"{listing}\n"
-                "Call list_projects to refresh."
+                "Retry with one of the projects listed above."
             ),
             status="not_found",
         )
@@ -193,7 +191,7 @@ def _resolve_project(
 
     if not known:
         return ProjectResolution(
-            error_text="No projects found. Call list_projects.",
+            error_text="No projects found in the standards repository.",
             status="not_found",
         )
 
@@ -203,8 +201,7 @@ def _resolve_project(
             "Which project? Pass `project=` as the basename of your current "
             "workspace directory (e.g. folder NexRe → project=\"nexre\"). "
             "Available:\n"
-            f"{listing}\n"
-            "Or call list_projects."
+            f"{listing}"
         ),
         status="needs_project",
     )
@@ -254,91 +251,103 @@ def _next_calls_section(doc: RuleDoc, project: str, key: str = "see_also") -> st
 
 
 def _format_call(kind: str, project: str, name: str) -> str | None:
-    """Render a see_also/targets entry as a get_doc (or other entry-point) call."""
+    """Render a see_also/targets entry as a playbook_get_doc (or other entry-point) call."""
     if kind == "tool":
         return _format_tool_call(project, name)
     if kind == "core":
         if name in SEE_ALSO_CORE:
             return (
-                f'`get_doc(project="{project}", kind="guardrails")` - always-on rules'
+                f'`playbook_get_doc(project="{project}", kind="guardrails")` - always-on rules'
             )
         return None
     if kind == "pattern":
         return (
-            f'`get_doc(project="{project}", kind="pattern", name="{name}")` '
+            f'`playbook_get_doc(project="{project}", kind="pattern", name="{name}")` '
             f" - pattern `{name}`"
         )
     if kind == "skill":
         return (
-            f'`get_doc(project="{project}", kind="skill", name="{name}")` - skill `{name}`'
+            f'`playbook_get_doc(project="{project}", kind="skill", name="{name}")` '
+            f"- skill `{name}`"
         )
     if kind == "workflow":
         return (
-            f'`get_doc(project="{project}", kind="workflow", name="{name}")` '
+            f'`playbook_get_doc(project="{project}", kind="workflow", name="{name}")` '
             f" - workflow `{name}`"
         )
     if kind in ("gate", "gates"):
         if name in ("", "gate", "README"):
-            return f'`get_doc(project="{project}", kind="gate")` - gate `{name or "README"}`'
+            return (
+                f'`playbook_get_doc(project="{project}", kind="gate")` '
+                f'- gate `{name or "README"}`'
+            )
         return (
-            f'`get_doc(project="{project}", kind="gate", name="{name}")` - gate `{name}`'
+            f'`playbook_get_doc(project="{project}", kind="gate", name="{name}")` '
+            f"- gate `{name}`"
         )
     if kind == "language":
         if "/" in name:
-            lang, doc = name.split("/", 1)
+            lang, section = name.split("/", 1)
             return (
-                f'`get_doc(project="{project}", kind="language", name="{lang}", '
-                f'doc="{doc}")` - {lang} {doc}'
+                f'`playbook_get_doc(project="{project}", kind="language", name="{lang}", '
+                f'section="{section}")` - {lang} {section}'
             )
         return (
-            f'`get_doc(project="{project}", kind="language", name="{name}")` '
+            f'`playbook_get_doc(project="{project}", kind="language", name="{name}")` '
             f" - {name} standards"
         )
     if kind == "architecture":
         if name in ("", "overview"):
-            return f'`get_doc(project="{project}", kind="architecture")` - overview'
+            return f'`playbook_get_doc(project="{project}", kind="architecture")` - overview'
         return (
-            f'`get_doc(project="{project}", kind="architecture", name="{name}")` '
+            f'`playbook_get_doc(project="{project}", kind="architecture", name="{name}")` '
             f" - ADR `{name}`"
         )
     if kind == "requirement":
         return (
-            f'`get_doc(project="{project}", kind="requirement", name="{name}")` '
+            f'`playbook_get_doc(project="{project}", kind="requirement", name="{name}")` '
             f" - requirement `{name}`"
         )
     if kind == "agents":
-        return f'`get_doc(project="{project}", kind="agents")` - AGENTS.md'
+        return f'`playbook_get_doc(project="{project}", kind="agents")` - AGENTS.md'
     return None
 
 
 def _format_tool_call(project: str, name: str) -> str | None:
-    """Render a `see_also: [tool:<name>]` entry as a literal tool call."""
+    """Render a `see_also: [tool:<name>]` entry as a literal tool call.
+
+    Old (pre-0.7.0) tool names remain valid in frontmatter and render as the
+    current `playbook_*` names, so existing corpus docs need no migration.
+    """
     if name not in SEE_ALSO_TOOLS:
         return None
-    if name == "start_task":
+    if name in ("start_task", "playbook_start_task"):
         return (
-            f'**START HERE** - `start_task(project="{project}", '
+            f'**START HERE** - `playbook_start_task(project="{project}", '
             'task="<one sentence describing what the user asked for>")` '
             " - guardrails + matched workflow in one call"
         )
-    if name in ("get_guardrails", "get_doc"):
-        return f'`get_doc(project="{project}", kind="guardrails")` - always-on rules'
-    if name == "find_rules":
-        return f'`find_rules(project="{project}")` - list every rule doc (add `query=` to search)'
-    if name == "list_requirements":
-        return f'`list_requirements(project="{project}")` - catalogue PRDs/stories'
-    if name == "get_requirement":
-        # Legacy frontmatter alias - still render as get_doc.
+    if name in ("get_guardrails", "get_doc", "playbook_get_doc"):
+        return f'`playbook_get_doc(project="{project}", kind="guardrails")` - always-on rules'
+    if name in ("find_rules", "playbook_search_docs"):
         return (
-            f'`get_doc(project="{project}", kind="requirement", name="<id>")` '
+            f'`playbook_search_docs(project="{project}")` '
+            "- list every rule doc (add `query=` to search)"
+        )
+    if name in ("list_requirements", "playbook_list_requirements"):
+        return f'`playbook_list_requirements(project="{project}")` - catalogue PRDs/stories'
+    if name == "get_requirement":
+        # Legacy frontmatter alias - still render as playbook_get_doc.
+        return (
+            f'`playbook_get_doc(project="{project}", kind="requirement", name="<id>")` '
             " - fetch a PRD or story"
         )
-    if name == "start_requirement":
+    if name in ("start_requirement", "playbook_start_requirement"):
         return (
-            f'`start_requirement(project="{project}", intent="<what to specify>")` '
+            f'`playbook_start_requirement(project="{project}", intent="<what to specify>")` '
             " - PM authoring bootstrap"
         )
-    return "`list_projects()` - available projects"
+    return None
 
 
 def _render(doc: RuleDoc, project: str) -> str:
@@ -408,12 +417,12 @@ async def dispatch(
 
     if kind == "language":
         language = doc_name
-        doc = (arguments.get("doc") or "standards").strip()
-        if doc not in _LANGUAGE_DOCS:
+        section = (arguments.get("section") or "standards").strip()
+        if section not in _LANGUAGE_DOCS:
             _set_status(ctx, "error")
-            return _not_found(f"`doc` must be one of {_LANGUAGE_DOCS}; got '{doc}'.")
-        rel = f"languages/{language}/{doc}.md"
-        return _fetch(store, ctx, project, rel, f"{language}/{doc}")
+            return _not_found(f"`section` must be one of {_LANGUAGE_DOCS}; got '{section}'.")
+        rel = f"languages/{language}/{section}.md"
+        return _fetch(store, ctx, project, rel, f"{language}/{section}")
 
     if kind == "pattern":
         return _fetch(store, ctx, project, f"patterns/{doc_name}.md", f"pattern '{doc_name}'")
@@ -452,7 +461,7 @@ def _fetch(
         return _not_found(
             f"{label} not found for project '{project}' "
             f"(expected at {relative_path}). "
-            "Call find_rules to see what is available."
+            "Call playbook_search_docs to see what is available."
         )
     return [TextContent(type="text", text=_render(doc, project))]
 
@@ -564,7 +573,7 @@ def _get_requirement(store: RulesStore, ctx: object, arguments: dict) -> list[Te
     doc = _find_req(store, req_id, project_arg)
     if not doc:
         _set_status(ctx, "not_found")
-        return _not_found(f"Requirement '{req_id}' not found. Call list_requirements.")
+        return _not_found(f"Requirement '{req_id}' not found. Call playbook_list_requirements.")
 
     ctx.doc_path = f"{doc.corpus}/{doc.project}/{doc.relative_path}"
     ctx.requirement_id = doc.name

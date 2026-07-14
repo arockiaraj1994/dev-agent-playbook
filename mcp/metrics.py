@@ -153,15 +153,51 @@ class DashboardSummary:
     active: int
     inactive: int
     never_called: int
-    hourly: list[dict]  # 24 items: {h, ok, err, total}
+    hourly: list[dict]  # main-chart buckets: {label, ok, err, total}
     daily: list[dict]  # 7 items:  {label, search, get, list}
     live_users: list[dict]  # {user_name, editor, calls_24h, last_call}
     top_tools: list[dict]  # {tool, calls, share}
+    window_days: int = 1
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+# Pre-0.7.0 tool names collapse onto the current playbook_* names so the
+# dashboard shows one row per tool across the rename (same idea as the
+# IN ('search_rules','find_rules',…) unions elsewhere in this module).
+_LEGACY_TOOL_MAP = {
+    "start_task": "playbook_start_task",
+    "get_doc": "playbook_get_doc",
+    "get_requirement": "playbook_get_doc",
+    "get_guardrails": "playbook_get_doc",
+    "get_agents_md": "playbook_get_doc",
+    "get_architecture": "playbook_get_doc",
+    "get_language_rules": "playbook_get_doc",
+    "get_pattern": "playbook_get_doc",
+    "get_skill": "playbook_get_doc",
+    "get_workflow": "playbook_get_doc",
+    "get_gate": "playbook_get_doc",
+    "find_rules": "playbook_search_docs",
+    "search_rules": "playbook_search_docs",
+    "list_rule_docs": "playbook_search_docs",
+    "get_index": "playbook_search_docs",
+    "list_requirements": "playbook_list_requirements",
+    "start_requirement": "playbook_start_requirement",
+}
+
+_CANONICAL_TOOL_SQL = (
+    "CASE tool_name "
+    + " ".join(f"WHEN '{old}' THEN '{new}'" for old, new in _LEGACY_TOOL_MAP.items())
+    + " ELSE tool_name END"
+)
+
+# Family classification on the canonical name (search / get / list) for the
+# by-tool-family breakdown. LIKE fallbacks keep truly unknown names counted.
+_FAMILY_SEARCH_SQL = f"({_CANONICAL_TOOL_SQL}) IN ('playbook_search_docs')"
+_FAMILY_GET_SQL = f"({_CANONICAL_TOOL_SQL}) = 'playbook_get_doc'"
+_FAMILY_LIST_SQL = f"({_CANONICAL_TOOL_SQL}) LIKE 'playbook_list%' OR tool_name LIKE 'list%'"
 
 
 def _now() -> str:
@@ -441,7 +477,8 @@ class MetricsStore:
             ).fetchall()
         by_tool: dict[str, list[sqlite3.Row]] = {}
         for r in rows:
-            by_tool.setdefault(r["tool_name"], []).append(r)
+            canonical = _LEGACY_TOOL_MAP.get(r["tool_name"], r["tool_name"])
+            by_tool.setdefault(canonical, []).append(r)
         out: list[ToolStat] = []
         for tool_name, tool_rows in by_tool.items():
             latencies = [r["latency_ms"] for r in tool_rows]
@@ -499,7 +536,7 @@ class MetricsStore:
             SELECT query, user_name, top_result_path, top_result_score,
                    args_summary, created_at
             FROM calls
-            WHERE tool_name IN ('search_rules', 'find_rules')
+            WHERE tool_name IN ('search_rules', 'find_rules', 'playbook_search_docs')
               AND query IS NOT NULL {clause}
             ORDER BY created_at DESC
             LIMIT ?
@@ -518,44 +555,48 @@ class MetricsStore:
             for r in rows
         ]
 
-    async def dashboard_summary(self, *, inactive_days: int) -> DashboardSummary:
-        return await asyncio.to_thread(self._dashboard_summary_sync, inactive_days)
+    async def dashboard_summary(
+        self, *, inactive_days: int, window_days: int = 1
+    ) -> DashboardSummary:
+        return await asyncio.to_thread(self._dashboard_summary_sync, inactive_days, window_days)
 
-    def _dashboard_summary_sync(self, inactive_days: int) -> DashboardSummary:
+    def _dashboard_summary_sync(self, inactive_days: int, window_days: int = 1) -> DashboardSummary:
+        window_days = window_days if window_days in (1, 7, 30) else 1
+        cutoff_window = _iso_offset(days=window_days)
+        cutoff_prev_window = _iso_offset(days=window_days * 2)
         cutoff_24h = _iso_offset(hours=24)
-        cutoff_48h = _iso_offset(hours=48)
         cutoff_7d = _iso_offset(days=7)
         # "Connected" = initialized within the last 4 hours (SSE connections
         # are long-lived; initialize fires once when the editor connects).
         cutoff_connected = _iso_offset(hours=4)
 
         with _connect(self._path) as conn:
-            # Calls today and yesterday (for trend)
+            # Calls in this window and the previous one (for trend)
             r = conn.execute(
-                """
+                f"""
                 SELECT
                     COUNT(*) AS calls_today,
-                    SUM(CASE WHEN tool_name LIKE 'search%'
+                    SUM(CASE WHEN {_FAMILY_SEARCH_SQL}
                               AND (top_result_path IS NULL OR status = 'empty')
                              THEN 1 ELSE 0 END) AS zero_today
                 FROM calls WHERE created_at >= ?
                 """,
-                (cutoff_24h,),
+                (cutoff_window,),
             ).fetchone()
             calls_today: int = r["calls_today"] or 0
             zero_today: int = r["zero_today"] or 0
 
             r2 = conn.execute(
-                """
+                f"""
                 SELECT
                     COUNT(*) AS calls_yesterday,
-                    SUM(CASE WHEN tool_name LIKE 'search%'
+                    SUM(CASE WHEN {_FAMILY_SEARCH_SQL}
                               AND (top_result_path IS NULL OR status = 'empty')
                              THEN 1 ELSE 0 END) AS zero_yesterday
                 FROM calls
                 WHERE created_at >= ? AND created_at < ?
                 """,
-                (cutoff_48h, cutoff_24h),
+                (cutoff_prev_window, cutoff_window),
             ).fetchone()
             calls_yesterday: int = r2["calls_yesterday"] or 0
             zero_yesterday: int = r2["zero_yesterday"] or 0
@@ -581,29 +622,44 @@ class MetricsStore:
                 (cutoff_24h, cutoff_connected),
             ).fetchall()
 
-            # 24h hourly breakdown (SQLite stores UTC ISO strings)
-            hourly_rows = conn.execute(
-                """
-                SELECT
-                    CAST(strftime('%H', created_at) AS INTEGER) AS hour,
-                    SUM(CASE WHEN status = 'ok' THEN 1 ELSE 0 END)  AS ok_count,
-                    SUM(CASE WHEN status != 'ok' THEN 1 ELSE 0 END) AS err_count
-                FROM calls
-                WHERE created_at >= ?
-                GROUP BY hour
-                ORDER BY hour
-                """,
-                (cutoff_24h,),
-            ).fetchall()
+            # Main-chart buckets: hourly for the 24h window, daily otherwise
+            if window_days == 1:
+                bucket_rows = conn.execute(
+                    """
+                    SELECT
+                        CAST(strftime('%H', created_at) AS INTEGER) AS bucket,
+                        SUM(CASE WHEN status = 'ok' THEN 1 ELSE 0 END)  AS ok_count,
+                        SUM(CASE WHEN status != 'ok' THEN 1 ELSE 0 END) AS err_count
+                    FROM calls
+                    WHERE created_at >= ?
+                    GROUP BY bucket
+                    ORDER BY bucket
+                    """,
+                    (cutoff_24h,),
+                ).fetchall()
+            else:
+                bucket_rows = conn.execute(
+                    """
+                    SELECT
+                        date(created_at) AS bucket,
+                        SUM(CASE WHEN status = 'ok' THEN 1 ELSE 0 END)  AS ok_count,
+                        SUM(CASE WHEN status != 'ok' THEN 1 ELSE 0 END) AS err_count
+                    FROM calls
+                    WHERE created_at >= ?
+                    GROUP BY bucket
+                    ORDER BY bucket
+                    """,
+                    (cutoff_window,),
+                ).fetchall()
 
-            # 7-day daily breakdown by tool family
+            # 7-day daily breakdown by tool family (canonical names)
             daily_rows = conn.execute(
-                """
+                f"""
                 SELECT
                     date(created_at) AS day,
-                    SUM(CASE WHEN tool_name LIKE 'search%' THEN 1 ELSE 0 END) AS search_count,
-                    SUM(CASE WHEN tool_name LIKE 'get%'    THEN 1 ELSE 0 END) AS get_count,
-                    SUM(CASE WHEN tool_name LIKE 'list%'   THEN 1 ELSE 0 END) AS list_count
+                    SUM(CASE WHEN {_FAMILY_SEARCH_SQL} THEN 1 ELSE 0 END) AS search_count,
+                    SUM(CASE WHEN {_FAMILY_GET_SQL}    THEN 1 ELSE 0 END) AS get_count,
+                    SUM(CASE WHEN {_FAMILY_LIST_SQL}   THEN 1 ELSE 0 END) AS list_count
                 FROM calls
                 WHERE created_at >= ?
                 GROUP BY date(created_at)
@@ -612,14 +668,14 @@ class MetricsStore:
                 (cutoff_7d,),
             ).fetchall()
 
-            # Top tools 24h
+            # Top tools for the window, legacy names folded onto playbook_*
             top_tool_rows = conn.execute(
-                """
-                SELECT tool_name, COUNT(*) AS n
+                f"""
+                SELECT {_CANONICAL_TOOL_SQL} AS tool, COUNT(*) AS n
                 FROM calls WHERE created_at >= ?
-                GROUP BY tool_name ORDER BY n DESC LIMIT 7
+                GROUP BY tool ORDER BY n DESC LIMIT 7
                 """,
-                (cutoff_24h,),
+                (cutoff_window,),
             ).fetchall()
 
             # Adoption counts
@@ -645,14 +701,28 @@ class MetricsStore:
             never_called: int = adoption_rows["never_called"] or 0
             inactive_users: int = total_users - active_users - never_called
 
-        # Build filled hourly series (24 slots)
-        hourly_by_h: dict[int, tuple[int, int]] = {
-            r["hour"]: (r["ok_count"] or 0, r["err_count"] or 0) for r in hourly_rows
-        }
+        # Build the filled main-chart series
         hourly: list[dict] = []
-        for h in range(24):
-            ok, err = hourly_by_h.get(h, (0, 0))
-            hourly.append({"h": h, "ok": ok, "err": err, "total": ok + err})
+        if window_days == 1:
+            by_hour: dict[int, tuple[int, int]] = {
+                r["bucket"]: (r["ok_count"] or 0, r["err_count"] or 0) for r in bucket_rows
+            }
+            for h in range(24):
+                ok, err = by_hour.get(h, (0, 0))
+                hourly.append(
+                    {"label": f"{h:02d}:00", "ok": ok, "err": err, "total": ok + err}
+                )
+        else:
+            by_day: dict[str, tuple[int, int]] = {
+                r["bucket"]: (r["ok_count"] or 0, r["err_count"] or 0) for r in bucket_rows
+            }
+            today_for_series = datetime.now(UTC).date()
+            for offset in range(window_days - 1, -1, -1):
+                d = today_for_series - timedelta(days=offset)
+                ok, err = by_day.get(str(d), (0, 0))
+                hourly.append(
+                    {"label": d.strftime("%d %b"), "ok": ok, "err": err, "total": ok + err}
+                )
 
         # Build 7-day series (last 7 calendar days)
         daily_by_day: dict[str, dict] = {
@@ -684,7 +754,7 @@ class MetricsStore:
         ]
 
         # Top tools list
-        top_tools = [{"tool": r["tool_name"], "calls": r["n"]} for r in top_tool_rows]
+        top_tools = [{"tool": r["tool"], "calls": r["n"]} for r in top_tool_rows]
         max_calls = top_tools[0]["calls"] if top_tools else 1
         for t in top_tools:
             t["share"] = round(t["calls"] / max_calls, 3)
@@ -709,6 +779,7 @@ class MetricsStore:
             daily=daily,
             live_users=live_users,
             top_tools=top_tools,
+            window_days=window_days,
         )
 
     async def requirement_linked_rate(self, *, window_days: int = 30) -> float:
@@ -725,7 +796,8 @@ class MetricsStore:
                     SUM(CASE WHEN requirement_id IS NOT NULL AND requirement_id != ''
                              THEN 1 ELSE 0 END) AS linked
                 FROM calls
-                WHERE tool_name = 'start_task' AND created_at >= ?
+                WHERE tool_name IN ('start_task', 'playbook_start_task')
+                  AND created_at >= ?
                 """,
                 (cutoff,),
             ).fetchone()
@@ -913,8 +985,9 @@ def args_to_doc_path(tool_name: str, arguments: dict) -> str | None:
     if not project:
         return None
 
-    # Unified get_doc(kind=...) - preferred path.
-    if tool_name == "get_doc":
+    # Unified playbook_get_doc(kind=...) - preferred path ("get_doc" kept for
+    # historical metrics rows).
+    if tool_name in ("get_doc", "playbook_get_doc"):
         kind = arguments.get("kind")
         name = arguments.get("name")
         if kind == "agents":
@@ -928,8 +1001,8 @@ def args_to_doc_path(tool_name: str, arguments: dict) -> str | None:
         if kind == "language":
             if not name:
                 return None
-            doc = arguments.get("doc") or "standards"
-            return f"{project}/languages/{name}/{doc}.md"
+            section = arguments.get("section") or arguments.get("doc") or "standards"
+            return f"{project}/languages/{name}/{section}.md"
         if kind == "pattern":
             return f"{project}/patterns/{name}.md" if name else None
         if kind == "skill":

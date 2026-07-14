@@ -94,13 +94,19 @@ SEE_ALSO_KINDS = (
 )
 
 SEE_ALSO_TOOLS = (
+    # Current (0.7.0+) playbook_-namespaced tool names.
+    "playbook_start_task",
+    "playbook_get_doc",
+    "playbook_search_docs",
+    "playbook_list_requirements",
+    "playbook_start_requirement",
+    # Pre-0.7.0 aliases still accepted in frontmatter; render as the new names.
     "start_task",
     "get_guardrails",
     "get_doc",
     "find_rules",
-    "list_projects",
     "list_requirements",
-    "get_requirement",  # legacy alias in frontmatter → renders as get_doc
+    "get_requirement",
     "start_requirement",
 )
 

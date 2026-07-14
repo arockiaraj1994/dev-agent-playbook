@@ -138,7 +138,7 @@ rules belong in `core/guardrails.md`, not here.
 - `languages/<lang>/standards.md` + `testing.md` + `anti-patterns.md` for each language the project actually uses.
 - `patterns/<name>.md` - canonical noun-named patterns ("what good looks like").
 - `skills/<action>.md` - verb-noun playbooks. Add `triggers:` and `see_also:` frontmatter so they show up correctly in `INDEX.md`.
-- `workflows/{new-feature,bug-fix,security-fix,refactor}.md` - task-driven flows. These are the agent's first stop after `start_task`.
+- `workflows/{new-feature,bug-fix,security-fix,refactor}.md` - task-driven flows. These are the agent's first stop after `playbook_start_task`.
 - `gates/README.md` + `gates/scripts/verify-<lang>.sh` (executable). The validator fails if a gate script is not executable.
 
 ### Step 5 - Regenerate `INDEX.md` and validate
@@ -182,20 +182,20 @@ and chain forward from there. The contract:
 
 | Tool | When to call |
 |---|---|
-| `start_task(task, project?, requirement?)` | **The entry point - first call for any coding task.** `project` is optional when only one project exists. Returns identity + guardrails + optional requirement + matched workflow + `Next Calls`. |
-| `get_doc(kind, project?, name?, doc?, depth?)` | Fetch any standards or requirement doc. `kind` is one of `agents`, `guardrails`, `architecture`, `language`, `pattern`, `skill`, `workflow`, `gate`, `requirement`. |
-| `find_rules(project, query?, doc_type?, corpus?)` | Discovery. Omit `query` to list every doc with its trigger phrases; pass `query` for BM25 search. |
-| `list_projects()` | Available project names (when `start_task` cannot infer). |
-| `list_requirements(project, …)` | Catalogue PRDs/stories (ids + summaries, never bodies). |
-| `start_requirement(project, intent, …)` | PM authoring bootstrap (template + context + next id). |
+| `playbook_start_task(project, task, requirement?)` | **The entry point - first call for any coding task.** Returns identity + guardrails + optional requirement + matched workflow + `Next Calls`. |
+| `playbook_get_doc(kind, project, name?, section?, depth?)` | Fetch any standards or requirement doc. `kind` is one of `agents`, `guardrails`, `architecture`, `language`, `pattern`, `skill`, `workflow`, `gate`, `requirement`. |
+| `playbook_search_docs(project, query?, doc_type?, corpus?)` | Discovery. Omit `query` to list every doc with its trigger phrases; pass `query` to search. |
+| `playbook_list_requirements(project, …)` | Catalogue PRDs/stories (ids + summaries, never bodies). |
+| `playbook_start_requirement(project, intent, …)` | PM authoring bootstrap (template + context + next id). |
 
-All six tools are read-only and annotated as such (`readOnlyHint`), so
-clients can auto-approve them without prompting.
+`project` is always the basename of the user's workspace directory. All five
+tools are read-only and annotated as such (`readOnlyHint`), so clients can
+auto-approve them without prompting.
 
 Every doc response ends with a `## Next Calls` block generated from that
-doc's `see_also:` / `targets:` frontmatter, naming the exact `get_doc(...)`
+doc's `see_also:` / `targets:` frontmatter, naming the exact `playbook_get_doc(...)`
 follow-up calls to make. A doc with no `see_also:` is a dead end for the
-agent - which is why `AGENTS.md` declares `tool:start_task`.
+agent - which is why `AGENTS.md` declares `tool:playbook_start_task`.
 
 ### Sample prompts
 
@@ -206,7 +206,7 @@ We have a CVE on Quarkus in apache-camel - patch it.
 Refactor the invoice processor without changing behavior.
 ```
 
-The agent will call `start_task` first, then chain through the next calls
+The agent will call `playbook_start_task` first, then chain through the next calls
 the bundle returns.
 
 ---

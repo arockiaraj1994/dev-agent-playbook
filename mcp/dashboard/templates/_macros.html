@@ -1,0 +1,68 @@
+{# Shared UI macros - single source for markup repeated across pages. #}
+
+{% macro avatar(name, size=22, font=9) -%}
+<div class="avatar" data-name="{{ name }}" style="width:{{ size }}px;height:{{ size }}px;font-size:{{ font }}px">
+  {{- name[0].upper() -}}
+</div>
+{%- endmacro %}
+
+{% macro user_link(name, size=22, font=9) -%}
+<div class="user-cell">
+  {{ avatar(name, size, font) }}
+  <a href="/dashboard/users/{{ name }}">{{ name }}</a>
+</div>
+{%- endmacro %}
+
+{% macro status_badge(status) -%}
+{%- if status == "ok" -%}
+  <span class="badge green">ok</span>
+{%- elif status == "empty" -%}
+  <span class="badge amber">empty</span>
+{%- elif status == "not_found" -%}
+  <span class="badge amber">not found</span>
+{%- else -%}
+  <span class="badge red">{{ status }}</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro empty(msg, margin=None) -%}
+<div class="empty"{% if margin %} style="margin:{{ margin }}"{% endif %}>{{ msg }}</div>
+{%- endmacro %}
+
+{% macro kpi(label, value, foot='', tone='') -%}
+<div class="kpi">
+  <div class="kpi-label">{{ label }}</div>
+  <div class="kpi-value {{ tone }}">{{ value }}</div>
+  {% if foot %}<div class="kpi-foot"><span class="muted">{{ foot }}</span></div>{% endif %}
+</div>
+{%- endmacro %}
+
+{# The recent-calls table used on the dashboard, activity feed, and user detail. #}
+{% macro calls_table(calls, table_id=None) -%}
+<table class="grid"{% if table_id %} id="{{ table_id }}"{% endif %}>
+  <thead>
+    <tr>
+      <th>When</th>
+      <th>User</th>
+      <th>Editor</th>
+      <th>Tool</th>
+      <th>Args</th>
+      <th class="num">Latency</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in calls %}
+    <tr data-status="{{ c.status }}">
+      <td class="muted mono" style="font-size:12px">{{ c.created_at | since }}</td>
+      <td>{{ user_link(c.user_name) }}</td>
+      <td class="muted">{{ c.editor_name or " - " }}</td>
+      <td><code>{{ c.tool_name }}</code></td>
+      <td class="muted truncate">{{ c.args_summary }}</td>
+      <td class="num">{{ c.latency_ms }}ms</td>
+      <td>{{ status_badge(c.status) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{%- endmacro %}

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_macros.html" as ui %}
 {% block title %}Searches - {{ server_label }}{% endblock %}
 {% block crumb %}Search queries{% endblock %}
 
@@ -69,14 +70,7 @@
         {% for s in zero_result_searches %}
         <tr>
           <td class="muted">{{ s.created_at | since }}</td>
-          <td>
-            <div class="user-cell">
-              <div class="avatar" data-name="{{ s.user_name }}" style="width:22px;height:22px;font-size:9px">
-                {{ s.user_name[0].upper() }}
-              </div>
-              <a href="/dashboard/users/{{ s.user_name }}">{{ s.user_name }}</a>
-            </div>
-          </td>
+          <td>{{ ui.user_link(s.user_name) }}</td>
           <td><code>{{ s.query }}</code></td>
           <td class="muted">{{ s.project_filter or " - " }}</td>
           <td style="text-align:right">
@@ -117,14 +111,7 @@
         {% for s in recent_searches %}
         <tr>
           <td class="muted">{{ s.created_at | since }}</td>
-          <td>
-            <div class="user-cell">
-              <div class="avatar" data-name="{{ s.user_name }}" style="width:22px;height:22px;font-size:9px">
-                {{ s.user_name[0].upper() }}
-              </div>
-              <a href="/dashboard/users/{{ s.user_name }}">{{ s.user_name }}</a>
-            </div>
-          </td>
+          <td>{{ ui.user_link(s.user_name) }}</td>
           <td><code>{{ s.query }}</code></td>
           <td>
             {% if s.top_result_path %}
