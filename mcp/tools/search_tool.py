@@ -1,4 +1,4 @@
-"""tools/search_tool.py - find_rules tool.
+"""tools/search_tool.py - playbook_search_docs tool.
 
 One tool, two modes:
 
@@ -6,7 +6,7 @@ One tool, two modes:
     doc type, title, summary, and `triggers:` phrases. Replaces the old
     `list_rule_docs` and `get_index` tools.
  - With `query` → search mode. BM25 across the corpus, ranked snippets.
-    Replaces the old `search_rules`.
+    Replaces the old `search_rules` / `find_rules`.
 
 Only search mode writes `ctx.query` / `ctx.top_result_*`, so browsing the
 catalogue does not pollute the dashboard's search analytics.
@@ -19,30 +19,26 @@ from mcp.types import TextContent, Tool
 from loader import KNOWN_DOC_TYPES, RuleDoc, RulesStore
 from search import RulesSearchEngine
 
+from . import PROJECT_PARAM_DESC
 from .docs import _canonical_project
 
 DEFINITIONS: list[Tool] = [
     Tool(
-        name="find_rules",
+        name="playbook_search_docs",
         description=(
-            "Discover rule docs for a project. Omit `query` to list every doc "
-            "with its type, title, summary, and trigger phrases. Pass `query` "
-            "to BM25-search the corpus for cross-cutting questions or when you "
-            "don't know which doc to fetch - headings and frontmatter title/tags "
-            "are weighted 2× over body, and results are ranked snippets with "
-            "source path and parent heading. Default corpus is standards; pass "
-            "corpus=requirements or corpus=all to include PRDs/stories."
+            "Search or browse a project's docs. With `query`: keyword search "
+            "returning ranked snippets with source path and parent heading - "
+            "use for cross-cutting questions or when you don't know which doc "
+            "to fetch. Without `query`: catalogue of every doc with type, "
+            "title, summary, and trigger phrases. Searches standards by "
+            "default; set corpus=requirements or all to include PRDs/stories."
         ),
         inputSchema={
             "type": "object",
             "properties": {
                 "project": {
                     "type": "string",
-                    "description": (
-                        "Basename of the user's current workspace directory "
-                        "(case-insensitive match to standards/). "
-                        "NEVER invent another project."
-                    ),
+                    "description": PROJECT_PARAM_DESC,
                 },
                 "query": {
                     "type": "string",
@@ -58,9 +54,7 @@ DEFINITIONS: list[Tool] = [
                 },
                 "corpus": {
                     "type": "string",
-                    "description": (
-                        "Which corpus to search. Default: standards (preserves legacy behavior)."
-                    ),
+                    "description": "Which corpus to search. Default: standards.",
                     "enum": ["standards", "requirements", "all"],
                     "default": "standards",
                 },
@@ -77,7 +71,7 @@ DEFINITIONS: list[Tool] = [
     ),
 ]
 
-_NAMES = {"find_rules"}
+_NAMES = {"playbook_search_docs"}
 
 
 def _doc_title(doc: RuleDoc) -> str:
@@ -135,13 +129,14 @@ async def dispatch(
     project = _canonical_project(project_raw, known)
     if project is None:
         ctx.status = "not_found"  # type: ignore[attr-defined]
+        listing = "\n".join(f"- {p}" for p in known) or "(none)"
         return [
             TextContent(
                 type="text",
                 text=(
                     f"Project '{project_raw}' not found. "
                     "`project` must be the basename of your current workspace "
-                    "directory. Call list_projects to see valid names."
+                    f"directory. Available:\n{listing}"
                 ),
             )
         ]

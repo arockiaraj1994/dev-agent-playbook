@@ -8,6 +8,29 @@ changes after 1.0.0 will bump the **major**.
 
 ## [Unreleased]
 
+### Changed - BREAKING - v0.7.0 (tool surface → 5, `playbook_` namespace)
+- **All tools renamed with a `playbook_` prefix** so they cannot collide with
+  other MCP servers in a multi-server editor setup: `playbook_start_task`,
+  `playbook_get_doc`, `playbook_search_docs` (was `find_rules`),
+  `playbook_list_requirements`, `playbook_start_requirement`.
+- **`list_projects` removed (6 → 5 tools).** Every project-resolution error
+  already lists the valid projects, so the tool was redundant.
+- **`get_doc(doc=…)` → `playbook_get_doc(section=…)`.** A parameter named
+  `doc` on a doc-fetching tool was ambiguous; it selects the language
+  sub-doc (`standards` | `testing` | `anti-patterns`).
+- **`project` is now required on every tool** (was optional on
+  `start_task`/`get_doc`). No inference: the agent always states which
+  project's rules it wants; wrong/missing values still return the teaching
+  error with the valid project list.
+- **Server-level `instructions`** now carry the cross-tool workflow ("call
+  playbook_start_task first…"), so tool descriptions are declarative
+  (when to use + inputs + returns) instead of ALL-CAPS orchestration.
+- Old tool names remain valid in `see_also:`/`targets:` frontmatter and
+  render as the new names; dashboard metrics queries count old and new
+  names together. Fixed a stale `start_task` truncation hint that pointed
+  at the removed `get_agents_md` tool.
+- Version bumped to **0.7.0**.
+
 ### Added - v0.6.0 two-corpus (standards + requirements)
 - **`standards/` + `requirements/` roots.** Projects moved under `standards/`;
   PRDs/stories live under `requirements/<project>/PRD-*/`.

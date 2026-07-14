@@ -15,4 +15,12 @@ READ_ONLY = ToolAnnotations(
     openWorldHint=False,
 )
 
-__all__ = ["READ_ONLY"]
+# One shared description for the `project` parameter - every tool requires it,
+# so agents see identical wording everywhere.
+PROJECT_PARAM_DESC = (
+    "Basename of the user's current workspace directory "
+    "(e.g. cwd .../NexRe → 'nexre'; case-insensitive match to a standards/ "
+    "folder). Do not substitute a different project."
+)
+
+__all__ = ["PROJECT_PARAM_DESC", "READ_ONLY"]

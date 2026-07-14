@@ -1,10 +1,10 @@
 """tools/requirements.py - Requirements corpus MCP tools.
 
 Tools:
- - list_requirements - catalogue PRDs/stories (never bodies)
- - start_requirement - PM authoring bootstrap (template + context + next id)
+ - playbook_list_requirements - catalogue PRDs/stories (never bodies)
+ - playbook_start_requirement - PM authoring bootstrap (template + context + next id)
 
-Fetching a single PRD/story is `get_doc(kind="requirement", name=<id>)`
+Fetching a single PRD/story is `playbook_get_doc(kind="requirement", name=<id>)`
 in tools/docs.py - the requirements corpus is free once kinds share one tool.
 """
 
@@ -18,6 +18,7 @@ from mcp.types import TextContent, Tool
 from loader import RuleDoc, RulesStore
 from search import RulesSearchEngine
 
+from . import PROJECT_PARAM_DESC
 from .docs import _canonical_project
 
 _MCP_DIR = Path(__file__).resolve().parent.parent
@@ -25,23 +26,19 @@ _TEMPLATES_DIR = _MCP_DIR / "templates"
 
 DEFINITIONS: list[Tool] = [
     Tool(
-        name="list_requirements",
+        name="playbook_list_requirements",
         description=(
             "List PRDs and/or stories for a project. Returns id, title, status, "
             "priority, and a one-line summary - never bodies. Filter with "
             "type=, status=, or prd= (stories under a given PRD). Fetch a body "
-            'with get_doc(kind="requirement", name=<id>).'
+            'with playbook_get_doc(kind="requirement", name=<id>).'
         ),
         inputSchema={
             "type": "object",
             "properties": {
                 "project": {
                     "type": "string",
-                    "description": (
-                        "Basename of the user's current workspace directory "
-                        "(must exist under standards/; case-insensitive). "
-                        "NEVER invent another project."
-                    ),
+                    "description": PROJECT_PARAM_DESC,
                 },
                 "type": {
                     "type": "string",
@@ -62,25 +59,20 @@ DEFINITIONS: list[Tool] = [
         },
     ),
     Tool(
-        name="start_requirement",
+        name="playbook_start_requirement",
         description=(
-            "PM authoring bootstrap for a PRD or story. Not for coding "
-            "tasks (use start_task for those). Returns the template, "
-            "glossary, architecture overview, guardrails (so you cannot "
-            "spec something the team forbids), the matched write-* "
-            "workflow, the next free id, and suggested targets: from a "
-            "BM25 search over standards."
+            "Entry point for authoring a PRD or story (spec/PM work - for "
+            "coding tasks use playbook_start_task). Returns the template, "
+            "the next free id, glossary, architecture overview, guardrails, "
+            "the matched write-* workflow, and suggested implementation "
+            "targets from the standards corpus."
         ),
         inputSchema={
             "type": "object",
             "properties": {
                 "project": {
                     "type": "string",
-                    "description": (
-                        "Basename of the user's current workspace directory "
-                        "(case-insensitive match to standards/). "
-                        "NEVER invent another project."
-                    ),
+                    "description": PROJECT_PARAM_DESC,
                 },
                 "intent": {
                     "type": "string",
@@ -91,6 +83,7 @@ DEFINITIONS: list[Tool] = [
                 },
                 "type": {
                     "type": "string",
+                    "description": "What to author: prd (default) or story.",
                     "enum": ["prd", "story"],
                     "default": "prd",
                 },
@@ -241,9 +234,9 @@ async def dispatch(
     if name not in _NAMES:
         return None
 
-    if name == "list_requirements":
+    if name == "playbook_list_requirements":
         return _list_requirements(arguments, ctx, store)
-    if name == "start_requirement":
+    if name == "playbook_start_requirement":
         return _start_requirement(arguments, ctx, store, engine)
     return None
 
@@ -265,13 +258,14 @@ def _list_requirements(arguments: dict, ctx: object, store: RulesStore) -> list[
     project = _canonical_project(project_raw, known_unique)
     if project is None:
         ctx.status = "not_found"
+        listing = "\n".join(f"- {p}" for p in known_unique) or "(none)"
         return [
             TextContent(
                 type="text",
                 text=(
                     f"Project '{project_raw}' not found. "
                     "`project` must be the basename of your current workspace "
-                    "directory. Call list_projects to see valid names."
+                    f"directory. Available:\n{listing}"
                 ),
             )
         ]
@@ -295,7 +289,10 @@ def _list_requirements(arguments: dict, ctx: object, store: RulesStore) -> list[
             return [
                 TextContent(
                     type="text",
-                    text=(f"PRD '{prd_filter}' not found in {project}. Call list_requirements."),
+                    text=(
+                        f"PRD '{prd_filter}' not found in {project}. "
+                        "Call playbook_list_requirements."
+                    ),
                 )
             ]
         docs = store.stories_of(prd)
@@ -340,16 +337,18 @@ def _start_requirement(
             )
         ]
 
-    project = _canonical_project(project_raw, list(store.projects(corpus="standards")))
+    known_standards = list(store.projects(corpus="standards"))
+    project = _canonical_project(project_raw, known_standards)
     if project is None:
         ctx.status = "not_found"
+        listing = "\n".join(f"- {p}" for p in known_standards) or "(none)"
         return [
             TextContent(
                 type="text",
                 text=(
                     f"Project '{project_raw}' not found under standards/. "
                     "`project` must be the basename of your current workspace "
-                    "directory. Call list_projects."
+                    f"directory. Available:\n{listing}"
                 ),
             )
         ]
@@ -371,7 +370,8 @@ def _start_requirement(
                 TextContent(
                     type="text",
                     text=(
-                        f"Parent PRD '{parent_prd}' not found in {project}. Call list_requirements."
+                        f"Parent PRD '{parent_prd}' not found in {project}. "
+                        "Call playbook_list_requirements."
                     ),
                 )
             ]
@@ -391,7 +391,7 @@ def _start_requirement(
     suggestions = _suggest_targets(engine, project, intent)
 
     parts: list[str] = [
-        f"# start_requirement - {project}\n\n"
+        f"# playbook_start_requirement - {project}\n\n"
         f"_Intent:_ {intent}  \n"
         f"_Type:_ {kind}  \n"
         f"_Next id:_ **`{next_id}`**"
@@ -423,22 +423,22 @@ def _start_requirement(
         parts.append(
             "## Suggested `targets:` (edit before committing)\n\n"
             f"`targets: [{joined}]`\n\n"
-            "These came from a BM25 search over standards - keep what fits, "
+            "These came from a search over standards - keep what fits, "
             "drop the rest."
         )
     else:
         parts.append(
             "## Suggested `targets:`\n\n"
             "_No strong matches - call "
-            f'`find_rules(project="{project}", corpus="standards", '
+            f'`playbook_search_docs(project="{project}", corpus="standards", '
             'query="<keywords>")` to find candidates._'
         )
 
     parts.append(
         "---\n\n## Next Calls\n\n"
-        f'- `find_rules(project="{project}", corpus="standards", '
+        f'- `playbook_search_docs(project="{project}", corpus="standards", '
         f'query="{intent}")` - find more targets\n'
-        f'- `list_requirements(project="{project}")` - see existing PRDs/stories\n'
+        f'- `playbook_list_requirements(project="{project}")` - see existing PRDs/stories\n'
     )
 
     return [TextContent(type="text", text="\n\n".join(parts) + "\n")]
