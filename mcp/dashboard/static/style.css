@@ -371,7 +371,6 @@ code, pre, .mono { font-family: var(--font-mono); font-size: 0.9em; }
 .nav-item.active {
   background: var(--sidebar-bg-active);
   color: var(--sidebar-text);
-  box-shadow: inset 2px 0 0 var(--sidebar-active-strip);
 }
 .nav-icon {
   width: 16px; height: 16px;
@@ -1159,14 +1158,11 @@ h3 {
   padding: 5px 12px;
   color: var(--text-muted);
   border-radius: 4px;
-  margin-left: -1px;
-  border-left: 1px solid transparent;
-  transition: color 0.12s, border-color 0.12s;
+  transition: color 0.12s;
   display: block;
 }
 .toc a.active {
   color: var(--violet-700);
-  border-left-color: var(--violet-600);
   font-weight: 500;
 }
 .toc a:hover { color: var(--text); }
@@ -1866,7 +1862,6 @@ html, body { overflow-x: hidden; }
 }
 .palette-item.selected {
   background: var(--accent-50);
-  box-shadow: inset 2px 0 0 var(--accent-500);
 }
 .palette-item-label {
   overflow: hidden;
